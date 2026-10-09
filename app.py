@@ -1,6 +1,5 @@
 # =============================================================
-#  Monjaroo.shop — app.py FINAL v13
-#  + Blog enrichi + FAQ complète + Pages légales pro
+#  Monjaroo.shop — app.py FINAL v14 (compatible Render)
 # =============================================================
 
 from flask import (Flask, render_template, request, redirect, url_for,
@@ -16,7 +15,13 @@ import re, os, uuid, csv, io, base64
 import urllib.request
 import json as _json
 
+# =============================================================
+# CHEMINS (compatible Render + local)
+# =============================================================
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+# Sur Render, BASE_DIR = /opt/render/project/src
+# En local, BASE_DIR = C:\Users\User\Desktop\peptide
+
 UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
@@ -24,7 +29,8 @@ ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-moi-en-prod-!!!")
-    SQLALCHEMY_DATABASE_URI = "sqlite:///monjaroo.db"
+    # Sur Render, on utilise un chemin absolu pour SQLite
+    SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(BASE_DIR, "monjaroo.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     ADMIN_USERNAME = "admin"
@@ -465,7 +471,7 @@ def _(key, default=None):
 
 
 # =============================================================
-# DÉTECTION IP → LANGUE (avec fallback navigateur)
+# DÉTECTION IP → LANGUE
 # =============================================================
 COUNTRY_TO_LANG = {
     "FR": "fr", "BE": "fr", "LU": "fr", "MC": "fr", "SN": "fr", "CI": "fr",
@@ -506,7 +512,6 @@ def detect_country_from_ip(ip):
         return None
     if ip in _ip_cache:
         return _ip_cache[ip]
-
     try:
         url = f"https://ipapi.co/{ip}/country/"
         req = urllib.request.Request(url, headers={"User-Agent": "Monjaroo/1.0"})
@@ -514,11 +519,9 @@ def detect_country_from_ip(ip):
             code = r.read().decode().strip().upper()
             if len(code) == 2 and code.isalpha():
                 _ip_cache[ip] = code
-                print(f"[GEO] IP {ip} → pays {code}")
                 return code
-    except Exception as e:
-        print(f"[GEO] ipapi.co échec: {e}")
-
+    except Exception:
+        pass
     try:
         url = f"http://ip-api.com/json/{ip}?fields=status,countryCode"
         with urllib.request.urlopen(url, timeout=3) as r:
@@ -526,48 +529,31 @@ def detect_country_from_ip(ip):
         if data.get("status") == "success":
             code = data.get("countryCode", "").upper()
             _ip_cache[ip] = code
-            print(f"[GEO] IP {ip} → pays {code} (backup)")
             return code
-    except Exception as e:
-        print(f"[GEO] ip-api.com échec: {e}")
-
+    except Exception:
+        pass
     _ip_cache[ip] = None
     return None
 
 
 def detect_language():
-    """
-    Détection : Session → Cookie → IP → Navigateur → Défaut
-    """
-    # 1. Session (choix manuel)
     if "lang" in session and session["lang"] in app.config["LANGUAGES"]:
         return session["lang"]
-
-    # 2. Cookie
     cookie = request.cookies.get("lang")
     if cookie in app.config["LANGUAGES"]:
         return cookie
-
-    # 3. IP → pays → langue
     try:
         ip = get_client_ip()
         country = detect_country_from_ip(ip)
         if country and country in COUNTRY_TO_LANG:
-            lang = COUNTRY_TO_LANG[country]
-            print(f"[LANG] IP → pays {country} → langue {lang}")
-            return lang
-    except Exception as e:
-        print(f"[LANG] Erreur IP: {e}")
-
-    # 4. Langue du navigateur
+            return COUNTRY_TO_LANG[country]
+    except Exception:
+        pass
     accept = request.headers.get("Accept-Language", "")
     for chunk in accept.split(","):
         code = chunk.strip().split(";")[0].split("-")[0].lower()
         if code in app.config["LANGUAGES"]:
-            print(f"[LANG] Navigateur → {code}")
             return code
-
-    # 5. Défaut
     return app.config["DEFAULT_LANG"]
 
 
@@ -865,7 +851,6 @@ img{max-width:100%;display:block;height:auto}
 svg.ico{width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0}
 button{font-family:inherit}
 
-/* TOPBAR */
 .topbar{background:#f5f5f5;color:#333;font-size:13px;padding:8px 24px;
   display:flex;justify-content:space-between;align-items:center;
   border-bottom:1px solid var(--border);position:relative;z-index:1000}
@@ -889,7 +874,6 @@ button{font-family:inherit}
 .country-block .wa-mini{display:inline-flex;align-items:center;color:#25d366;margin-left:4px}
 .country-block .wa-mini svg{width:18px;height:18px}
 
-/* HEADER */
 .header{background:#fff;padding:16px 24px;display:flex;align-items:center;
   gap:24px;border-bottom:1px solid var(--border);position:relative;z-index:100}
 .header .logo{font-size:24px;font-weight:800;color:var(--vert);white-space:nowrap}
@@ -911,7 +895,6 @@ button{font-family:inherit}
   border-radius:30px;font-weight:600}
 .burger{display:none;cursor:pointer;color:var(--vert);padding:8px;background:none;border:0}
 
-/* NAV */
 .nav{padding:0 24px;display:flex;gap:26px;font-size:14px;font-weight:500;
   border-bottom:1px solid var(--border);background:#fff;flex-wrap:wrap;
   position:relative;z-index:99;align-items:center}
@@ -929,7 +912,6 @@ button{font-family:inherit}
 .dropdown-menu a{display:block;padding:11px 20px;color:#111;font-size:14px;white-space:nowrap}
 .dropdown-menu a:hover{background:#f7f7f9;color:var(--violet);opacity:1}
 
-/* HERO */
 .hero{position:relative;color:#fff;padding:72px 24px;overflow:hidden;
   min-height:480px;display:flex;align-items:center}
 .hero-bg{position:absolute;inset:0;z-index:0}
@@ -954,7 +936,6 @@ button{font-family:inherit}
   cursor:pointer;transition:all .3s}
 .hero-dots span.active{background:#fff;width:26px;border-radius:5px}
 
-/* FEATURES */
 .features{background:var(--bg-alt);padding:28px 24px;display:grid;
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:1200px;margin:0 auto}
 .feature{background:#fff;border-radius:var(--radius);padding:20px;display:flex;
@@ -963,7 +944,6 @@ button{font-family:inherit}
 .feature .ico svg{width:26px;height:26px}
 .feature p{margin:0;font-size:14px;color:#333}
 
-/* SECTIONS */
 .section{max-width:1200px;margin:0 auto;padding:56px 24px}
 .section-sm{max-width:1200px;margin:0 auto;padding:32px 24px}
 .about{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
@@ -980,7 +960,6 @@ button{font-family:inherit}
   border-bottom:2px solid rgba(255,255,255,.4);display:inline-block;padding-bottom:4px}
 .violet-section p{font-size:15px;color:#f0e6f7;margin:0 0 10px;max-width:640px}
 
-/* AVIS */
 .avis-label{color:var(--violet);font-weight:600;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
 .avis-title{font-size:28px;font-weight:800;margin:0 0 20px;color:#111}
 .avis-stats{display:flex;gap:28px;align-items:center;margin-bottom:28px;
@@ -1009,7 +988,6 @@ button{font-family:inherit}
 .avis-form .stars-input label:hover svg,.avis-form .stars-input label:hover ~ label svg,
 .avis-form .stars-input input:checked ~ label svg{fill:#f5b301}
 
-/* FLOAT BTNS */
 .float-btns{position:fixed;bottom:20px;right:20px;z-index:99999;
   display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none}
 .float-btns > *{pointer-events:auto}
@@ -1029,7 +1007,6 @@ button{font-family:inherit}
 .cart-float .badge{position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;
   font-size:11px;padding:2px 6px;border-radius:10px;font-weight:700;pointer-events:none}
 
-/* CART DRAWER */
 .cart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;
   pointer-events:none;transition:opacity .25s;z-index:100000}
 .cart-overlay.open{opacity:1;pointer-events:auto}
@@ -1061,7 +1038,6 @@ button{font-family:inherit}
   padding:12px;border-radius:8px;font-weight:700;margin-bottom:8px;cursor:pointer}
 .cart-empty{text-align:center;color:var(--muted);padding:40px 0}
 
-/* GRILLE */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px}
 .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);
   overflow:hidden;display:flex;flex-direction:column;transition:box-shadow var(--transition)}
@@ -1084,7 +1060,6 @@ button{font-family:inherit}
 .card-form .btn-options{background:#fff;color:var(--violet);border:2px solid var(--violet)}
 .card-note{font-size:12px;color:#8a8a8a;font-style:italic;margin-top:4px}
 
-/* BLOG */
 .blog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px}
 .blog-card{border:1px solid var(--border);border-radius:var(--radius);
   overflow:hidden;background:#fff;display:flex;flex-direction:column}
@@ -1096,7 +1071,6 @@ button{font-family:inherit}
 .blog-card p{color:#555;font-size:14px;margin:0 0 12px;flex:1}
 .blog-card a.read{color:var(--violet);font-weight:600;font-size:14px;margin-top:auto}
 
-/* FAQ */
 details{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
 details summary{cursor:pointer;padding:16px 20px;font-weight:600;color:#111;
   list-style:none;display:flex;justify-content:space-between;align-items:center;font-size:15px}
@@ -1104,14 +1078,12 @@ details summary::after{content:"+";font-size:20px;color:var(--violet);transition
 details[open] summary::after{transform:rotate(45deg)}
 details p{margin:0;padding:0 20px 16px;color:#555;font-size:14px;line-height:1.7}
 
-/* LEGAL */
 .legal h1{margin-bottom:8px}
 .legal h2{color:var(--vert);font-size:19px;margin:28px 0 10px}
 .legal h3{color:#111;font-size:16px;margin:20px 0 8px}
 .legal p,.legal li{color:#444;font-size:14px;line-height:1.75}
 .legal ul{padding-left:22px}
 
-/* NEWSLETTER */
 .newsletter{background:var(--vert);color:#fff;padding:48px 24px;text-align:center}
 .newsletter h2{color:#fff;font-size:24px;margin:0 0 8px}
 .newsletter p{color:#c9dede;margin-bottom:22px;font-size:14px}
@@ -1121,7 +1093,6 @@ details p{margin:0;padding:0 20px 16px;color:#555;font-size:14px;line-height:1.7
 .newsletter button{background:var(--violet);color:#fff;border:0;padding:12px 26px;
   border-radius:30px;font-weight:700;cursor:pointer}
 
-/* FOOTER */
 footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .footer-grid{max-width:1200px;margin:0 auto;display:grid;
   grid-template-columns:2fr 1fr 1fr 1.5fr;gap:32px;margin-bottom:32px}
@@ -1132,13 +1103,11 @@ footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .footer-grid a svg{width:14px;height:14px}
 .footer-copy{border-top:1px solid #1a4444;padding-top:16px;text-align:center;font-size:12px}
 
-/* FLASH */
 .flash{max-width:1200px;margin:14px auto 0;padding:0 24px}
 .flash-success{background:#e6f4ea;color:#1e6b3a;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px}
 .flash-error{background:#fdecea;color:#a32115;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px}
 .flash-info{background:#e8f0ff;color:#1e3a8a;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px}
 
-/* FORMULAIRES */
 .form label{display:block;margin-bottom:14px;font-size:14px;font-weight:500}
 .form input,.form textarea,.form select{width:100%;padding:10px 12px;
   border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:4px;
@@ -1146,7 +1115,6 @@ footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .form button{background:var(--violet);color:#fff;border:0;padding:11px 22px;
   border-radius:var(--radius-sm);font-weight:600;cursor:pointer;font-family:inherit}
 
-/* PWD EYE */
 .pwd-wrap{position:relative;display:block;margin-top:4px}
 .pwd-wrap input{padding-right:56px;width:100%;margin-top:0}
 .pwd-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);
@@ -1156,7 +1124,6 @@ footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .pwd-toggle:hover{background:var(--violet-fonce)}
 .pwd-toggle svg{width:18px;height:18px;pointer-events:none;stroke:#fff;fill:none}
 
-/* TABLEAUX */
 table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
 th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
 th{background:var(--bg-alt);color:#111;font-weight:600}
@@ -1165,7 +1132,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .btn-link{display:inline-block;background:var(--violet);color:#fff;padding:10px 18px;
   border-radius:var(--radius-sm);margin:8px 0;font-weight:600;cursor:pointer}
 
-/* BADGES */
 .badge-status{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
 .badge-en_attente{background:#fef3c7;color:#92400e}
 .badge-en_cours{background:#dbeafe;color:#1e40af}
@@ -1173,12 +1139,10 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .badge-livree{background:#d1fae5;color:#065f46}
 .badge-annulee{background:#fee2e2;color:#991b1b}
 
-/* ERROR 404 */
 .error-page{text-align:center;padding:100px 24px}
 .error-page h1{font-size:80px;color:var(--violet);margin:0}
 .error-page p{color:var(--muted);font-size:18px;margin:8px 0 22px}
 
-/* ADMIN */
 .admin-wrap{display:flex;min-height:100vh;background:#f0f2f5}
 .admin-side{width:230px;background:var(--vert);color:#fff;padding:22px 0;flex-shrink:0}
 .admin-side h2{font-size:15px;padding:0 20px;margin:0 0 18px;color:#fff;letter-spacing:1px}
@@ -1202,7 +1166,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .stat-card.red .value{color:#dc2626}
 .stat-card.green .value{color:#059669}
 
-/* CHECKOUT */
 .checkout-btn{display:flex;align-items:center;justify-content:center;gap:10px;
   background:#25d366;color:#fff;padding:16px 24px;border-radius:10px;font-weight:700;
   font-size:16px;cursor:pointer;border:0;font-family:inherit;width:100%;
@@ -1210,7 +1173,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .checkout-btn:hover{background:#1eb955}
 .checkout-btn svg{width:24px;height:24px;fill:#fff;pointer-events:none}
 
-/* RESPONSIVE — TABLETTE */
 @media(max-width:1024px){
   .hero h1{font-size:36px}
   .hero{min-height:420px;padding:60px 20px}
@@ -1222,7 +1184,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .footer-grid{grid-template-columns:1.5fr 1fr 1fr 1.2fr;gap:24px}
 }
 
-/* RESPONSIVE — MOBILE */
 @media(max-width:768px){
   .topbar{padding:6px 12px;font-size:12px;flex-wrap:wrap;gap:6px}
   .topbar .left,.topbar .right{gap:6px}
@@ -1332,7 +1293,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   th,td{padding:8px;font-size:12px}
 }
 
-/* RESPONSIVE — TRÈS PETIT MOBILE */
 @media(max-width:480px){
   .features{grid-template-columns:1fr}
   .grid{grid-template-columns:1fr 1fr;gap:10px}
@@ -1353,7 +1313,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .wa-btn,.cart-float{width:46px;height:46px}
 }
 
-/* FIX IOS */
 @supports(-webkit-touch-callout:none){
   input,textarea,select{font-size:16px}
   .cart-drawer{height:-webkit-fill-available}
@@ -1445,7 +1404,7 @@ TEMPLATES["base"] = """
       <a href="{{ url_for('page_dynamique', slug='conditions-generales') }}">{{ _('cgv') }}</a>
       <a href="{{ url_for('page_dynamique', slug='retours-remboursements') }}">{{ _('returns') }}</a>
       <a href="{{ url_for('page_dynamique', slug='politique-confidentialite') }}">{{ _('privacy') }}</a>
-      <a href="{{ url_for('page_dynamique', slug='questions-equitables') }}">{{ _('fair') }}</a>
+      <a href="{{ url_for('faq') }}">{{ _('faq') }}</a>
     </div>
   </div>
 </nav>
@@ -1703,7 +1662,7 @@ TEMPLATES["admin_login"] = """
   <div style="margin-top:24px;padding:14px;background:#f7f7f9;border-radius:8px;font-size:13px;color:#555;max-width:420px">
     <strong>Identifiants :</strong><br>
     Utilisateur : <code>admin</code> — Email : <code>admin@monjaroo.shop</code><br>
-    Mot de passe : <code>admin123</code>
+    Mot de passe : celui que vous avez configuré
   </div>
 </section>
 {% endblock %}
@@ -3266,10 +3225,10 @@ def server_error(e):
 # SEED — Données initiales
 # =============================================================
 def seed():
-    with app.app_context():
+    try:
         db.create_all()
 
-        # ---------- CATEGORIES ----------
+        # CATEGORIES
         cats = {"peptides": "Peptides", "medicaments": "Médicaments", "pilules": "Pilules pour l'érection"}
         for slug, nom in cats.items():
             if not Categorie.query.filter_by(slug=slug).first():
@@ -3280,7 +3239,7 @@ def seed():
         cat_pep = Categorie.query.filter_by(slug="peptides").first()
         cat_pil = Categorie.query.filter_by(slug="pilules").first()
 
-        # ---------- SLIDES ----------
+        # SLIDES
         if not Slide.query.first():
             for i, img in enumerate([
                 "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1600",
@@ -3291,7 +3250,7 @@ def seed():
             ]):
                 db.session.add(Slide(image=img, ordre=i))
 
-        # ---------- CONTENU ACCUEIL ----------
+        # CONTENU ACCUEIL
         defauts = {
             "hero_image": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1600",
             "hero_badge": "Bienvenue dans la boutique Monjaroo",
@@ -3315,7 +3274,7 @@ def seed():
             if not Contenu.query.filter_by(cle=k).first():
                 db.session.add(Contenu(cle=k, valeur=v))
 
-        # ---------- PRODUITS MÉDICAMENTS ----------
+        # PRODUITS MÉDICAMENTS
         if cat_med and not Produit.query.filter_by(categorie_id=cat_med.id).first():
             for nom, sous, pm, px in [
                 ("Diazépam 10 mg, pot de 100 compresses", "diazepam", 149.95, 0),
@@ -3338,7 +3297,7 @@ def seed():
                 db.session.add(Produit(nom=nom, slug=slugify(nom + "-" + sous), sous_titre=sous,
                                        prix=pm, prix_max=px, stock=30, categorie_id=cat_med.id, actif=True))
 
-        # ---------- PRODUITS PEPTIDES ----------
+        # PRODUITS PEPTIDES
         if cat_pep and not Produit.query.filter_by(categorie_id=cat_pep.id).first():
             for nom, sous, prix in [
                 ("Tirzapetide 40 mg", "tirzepatide", 209.95),
@@ -3352,7 +3311,7 @@ def seed():
                 db.session.add(Produit(nom=nom, slug=slugify(nom + "-" + sous), sous_titre=sous,
                                        prix=prix, stock=20, categorie_id=cat_pep.id, actif=True))
 
-        # ---------- PRODUITS PILULES ----------
+        # PRODUITS PILULES
         if cat_pil and not Produit.query.filter_by(categorie_id=cat_pil.id).first():
             for nom, sous, prix in [
                 ("Lovegra 100 mg", "Lovegra", 9.95),
@@ -3365,245 +3324,94 @@ def seed():
                 db.session.add(Produit(nom=nom, slug=slugify(nom + "-" + sous), sous_titre=sous,
                                        prix=prix, stock=50, categorie_id=cat_pil.id, actif=True))
 
-        # ---------- PAGES LÉGALES ----------
+        # PAGES LÉGALES
         pages = {
             "conditions-generales": ("Conditions générales", """
-                <p><em>Nos règles et conditions — Bienvenue sur la page des Conditions Générales de Vente et de la Politique du Site de Monjaroo.shop. Ces conditions s'appliquent à tous les achats et services proposés sur notre boutique en ligne.</em></p>
-
+                <p><em>Nos règles et conditions — Bienvenue sur la page des Conditions Générales de Vente et de la Politique du Site de Monjaroo.shop.</em></p>
                 <h2>1. Processus de commande et livraisons</h2>
-                <h3>1.1. Passer une commande</h3>
-                <p>Vous pouvez facilement passer commande via notre boutique en ligne. Après avoir effectué le paiement, vous recevrez un e-mail de confirmation sous 24 heures. Notre équipe traite tous les paiements et expédie les commandes chaque jour ouvré entre 14h00 et 19h00.</p>
-                <h3>1.2. Délais de livraison</h3>
-                <p>Les délais de livraison dépendent du transporteur. Les commandes passées avant 14h00 sont traitées et expédiées le jour même (jours ouvrés). Les commandes passées après 14h00 sont expédiées le jour ouvré suivant. Pour les envois en France métropolitaine, le délai de livraison est de 1 à 4 jours ouvrés. Pour les envois internationaux, le délai estimé est de 2 à 5 jours ouvrés, selon le pays de destination.</p>
-                <h3>1.3. Frais de livraison</h3>
-                <p>Les frais de livraison sont affichés lors du paiement. Les frais de livraison internationaux varient selon le pays et sont clairement indiqués à l'avance.</p>
-                <h3>1.4. Informations d'adresse correctes</h3>
-                <p>Il incombe au client de saisir une adresse de livraison correcte. Monjaroo.shop décline toute responsabilité en cas de retard ou de non-livraison si l'adresse fournie s'avère incorrecte.</p>
-
+                <p>Vous pouvez facilement passer commande via notre boutique en ligne. Après avoir effectué le paiement, vous recevrez un e-mail de confirmation sous 24 heures.</p>
                 <h2>2. Envoi</h2>
-                <h3>2.1. Méthode d'expédition</h3>
-                <p>Nous faisons appel à des transporteurs de confiance pour livrer nos produits à nos clients rapidement et en toute sécurité. Pour les envois internationaux, plusieurs transporteurs peuvent intervenir.</p>
-                <h3>2.2. Confirmation d'expédition</h3>
-                <p>Dès l'expédition de votre colis, vous recevrez une confirmation par e-mail contenant toutes les informations nécessaires, y compris un lien de suivi (le cas échéant). Ce service est assuré les jours ouvrables avant 20h00 et non le week-end.</p>
-                <h3>2.3. Délais et retards de livraison</h3>
-                <p>En France, le délai de livraison estimé est de 1 à 3 jours ouvrables. Pour les envois internationaux, il faut compter en moyenne 2 à 5 jours ouvrables. Si vous n'avez pas reçu votre colis après 7 jours ouvrables, veuillez contacter notre service client.</p>
-                <h3>2.4. Colis perdus</h3>
-                <p>Si un colis n'est pas arrivé dans les 14 jours suivant la date de livraison prévue, nous vous rembourserons les frais de remplacement. Si le suivi confirme la livraison du colis et que le client ne l'a pas reçu, Monjaroo.shop ne procédera pas à un remplacement gratuit.</p>
-
+                <p>Les commandes passées avant 14h00 sont traitées et expédiées le jour même (jours ouvrés). Les commandes passées après 14h00 sont expédiées le jour ouvré suivant.</p>
                 <h2>3. Prix et paiements</h2>
-                <h3>3.1. Structure des prix</h3>
-                <p>Tous les prix affichés sur notre boutique en ligne incluent la TVA et excluent les frais de livraison, sauf indication contraire.</p>
-                <h3>3.2. Options de paiement</h3>
-                <p>Vous pouvez choisir parmi différents modes de paiement. Il est de la responsabilité du client de saisir correctement ses informations de paiement.</p>
-                <h3>3.3. Traitement des paiements</h3>
-                <p>Les commandes ne seront traitées qu'après réception du paiement intégral.</p>
-
-                <h2>4. Garanties de qualité et de produits</h2>
-                <h3>4.1. Qualité des produits</h3>
-                <p>Nous garantissons que tous nos produits répondent aux normes les plus élevées. Dans le cas exceptionnel où vous ne seriez pas satisfait de la qualité d'un produit, veuillez contacter notre service client dans un délai de 14 jours.</p>
-                <h3>4.2. Problèmes et réclamations</h3>
-                <p>Si vous rencontrez un problème avec un produit, vous pouvez le signaler à notre service client. Nous examinerons votre réclamation et, le cas échéant, vous proposerons un remplacement ou un remboursement.</p>
-                <h3>4.3. Emballage et fournisseurs</h3>
-                <p>Les produits sont expédiés dans un emballage discret et protecteur. Certains produits peuvent différer des images présentées sur le site web.</p>
-
+                <p>Tous les prix affichés incluent la TVA et excluent les frais de livraison, sauf indication contraire.</p>
+                <h2>4. Garanties de qualité</h2>
+                <p>Nous garantissons que tous nos produits répondent aux normes les plus élevées. En cas de problème, contactez notre service client dans un délai de 14 jours.</p>
                 <h2>5. Annulations et retours</h2>
-                <h3>5.1. Annulation des commandes</h3>
-                <p>Les commandes peuvent être annulées tant qu'elles n'ont pas encore été expédiées. Après expédition, l'annulation n'est plus possible.</p>
-                <h3>5.2. Politique de retour</h3>
-                <p>Compte tenu de la nature de nos produits, nous n'acceptons pas les retours sauf en cas d'erreur de notre part. Pour plus d'informations, veuillez consulter notre politique de remboursement et de retour.</p>
-
-                <h2>6. Responsabilité et garanties</h2>
-                <p>Monjaroo.shop n'est pas responsable des dommages indirects ou accessoires, tels que la perte de profit ou d'utilisation.</p>
-
+                <p>Compte tenu de la nature de nos produits, nous n'acceptons pas les retours sauf en cas d'erreur de notre part.</p>
+                <h2>6. Responsabilité</h2>
+                <p>Monjaroo.shop n'est pas responsable des dommages indirects ou accessoires.</p>
                 <h2>7. Force majeure</h2>
-                <p>En cas de force majeure (catastrophe naturelle, grève, etc.), Monjaroo.shop se réserve le droit de retarder ou d'annuler la livraison des produits. Nous vous en informerons dans les meilleurs délais.</p>
-
+                <p>En cas de force majeure, Monjaroo.shop se réserve le droit de retarder ou d'annuler la livraison.</p>
                 <h2>8. Propriété intellectuelle</h2>
-                <p>L'ensemble du contenu de notre site web, y compris les textes, les images et les logos, est la propriété de Monjaroo.shop et ne peut être reproduit ou distribué sans notre autorisation.</p>
-
-                <h2>9. Droit applicable et litiges</h2>
-                <p>Les présentes conditions générales sont régies par le droit français. Tout litige sera soumis à la juridiction compétente.</p>
-
-                <h2>10. Politique du site</h2>
-                <h3>10.1. Principes de publication</h3>
-                <p>Nous nous efforçons de publier des informations exactes, objectives et documentées. L'ensemble du contenu de notre site web est rigoureusement vérifié par notre équipe éditoriale.</p>
-                <h3>10.2. Financement</h3>
-                <p>Le site web est financé par diverses sources qui n'affectent pas notre indépendance éditoriale.</p>
-                <h3>10.3. Commentaires</h3>
-                <p>Nous encourageons nos visiteurs à nous faire part de leurs commentaires. Chaque commentaire ou réclamation est pris au sérieux et traité avec soin.</p>
-                <h3>10.4. Corrections</h3>
-                <p>En cas d'informations erronées sur notre site web, nous les corrigerons dans les plus brefs délais.</p>
-                <h3>10.5. Éthique</h3>
-                <p>Nos publications sont indépendantes et ne subissent aucune influence commerciale extérieure.</p>
-                <h3>10.6. Diversité</h3>
-                <p>Chez Monjaroo.shop, nous nous efforçons de créer un environnement de travail et un contenu inclusifs et diversifiés.</p>
-
-                <h2>Conclusion</h2>
-                <p>En utilisant notre site web et nos services, vous acceptez les conditions générales mentionnées ci-dessus. Pour toute question, vous pouvez contacter notre service client : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a></p>
+                <p>L'ensemble du contenu de notre site web est la propriété de Monjaroo.shop.</p>
+                <h2>9. Droit applicable</h2>
+                <p>Les présentes conditions générales sont régies par le droit français.</p>
+                <h2>10. Contact</h2>
+                <p>Pour toute question : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a></p>
             """),
-
             "retours-remboursements": ("Retours et remboursements", """
-                <p><em>Tout ce que vous devez savoir sur les remboursements et les retours. Chez Monjaroo.shop, une expérience d'achat efficace et transparente est primordiale. Cette politique fait partie intégrante de nos Conditions Générales de Vente.</em></p>
-
-                <h2>1. Politique générale de retours et de remboursements</h2>
-                <p>Compte tenu de la nature de nos produits, les retours ne sont généralement pas possibles. Cela concerne particulièrement les articles pour lesquels la sécurité, l'hygiène ou la santé sont des facteurs importants. Cependant, en cas de défaut ou d'erreur de notre part, nous vous proposerons bien entendu une solution adaptée.</p>
-                <p><strong>Exemples de cas acceptables :</strong></p>
-                <ul>
-                  <li>Réception d'un produit non conforme à votre commande</li>
-                  <li>Produits présentant un problème de qualité avéré</li>
-                </ul>
-                <p>Veuillez noter que les produits ouverts ne peuvent être retournés. Cette mesure est nécessaire pour des raisons d'hygiène et de sécurité.</p>
-
-                <h3>1.2. Produits endommagés à la livraison</h3>
-                <p>Avez-vous reçu un produit endommagé pendant le transport ? Veuillez contacter notre service client dans les 48 heures, en indiquant votre numéro de commande et en joignant des photos du produit et de son emballage. Notre équipe évaluera la situation et vous proposera une solution adaptée.</p>
-
-                <h2>2. Procédure de retour</h2>
-                <p>Avez-vous reçu un produit défectueux ou un article non conforme à votre commande ? Veuillez contacter notre service client au plus vite à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a>. Indiquez clairement le motif du retour et joignez des photos nettes du produit.</p>
-                <p>Dès réception de votre signalement, notre équipe entamera une enquête approfondie afin d'évaluer la situation. Selon les conclusions, nous vous indiquerons la marche à suivre, comme un remplacement ou une solution adaptée.</p>
-
-                <h2>3. Remboursements</h2>
-                <h3>3.1. Conditions de remboursement</h3>
-                <p>Un remboursement ne sera effectué que si le produit est défectueux ou non conforme à votre commande. Les autres situations ne sont pas admissibles.</p>
-                <h3>3.2. Notification de remboursement</h3>
-                <p>Contactez notre service client et indiquez clairement votre numéro de commande, le motif du remboursement et joignez des photos du produit.</p>
-                <h3>3.3. Évaluation de la demande</h3>
-                <p>Notre équipe évalue votre demande et lance une enquête pour déterminer la situation.</p>
-                <h3>3.4. Approbation et traitement</h3>
-                <p>Après approbation, le remboursement sera traité sous 14 jours ouvrés. Vous recevrez une confirmation par e-mail dès que le remboursement aura été approuvé. Selon votre mode de paiement initial, le montant peut apparaître sur votre compte quelques jours plus tard.</p>
-                <p>Les remboursements sont effectués selon le même mode de paiement que celui utilisé lors de l'achat initial.</p>
-
-                <h2>4. Annulation de votre commande</h2>
-                <p>Une commande peut être annulée uniquement avant son expédition. Si vous souhaitez annuler votre commande, veuillez contacter notre service client au plus vite. Une fois expédiée, l'annulation n'est plus possible.</p>
-
-                <h2>5. Annulations</h2>
-                <h3>5.1. Annulation des commandes</h3>
-                <p>Les commandes peuvent être annulées gratuitement tant qu'elles n'ont pas été expédiées. Une fois expédiée, l'annulation n'est plus possible.</p>
-                <h3>5.2. Procédure d'annulation</h3>
-                <p>Pour annuler une commande, veuillez contacter notre service client à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a> en indiquant votre numéro de commande et le motif de l'annulation.</p>
-
-                <h2>6. Coordonnées</h2>
-                <p>Vous pouvez nous contacter par e-mail : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a> ou via le bouton WhatsApp en bas à droite de l'écran.</p>
-
-                <h2>7. Conclusion</h2>
-                <p>L'utilisation de notre site web et la passation de commandes impliquent votre acceptation de notre politique de retour et de remboursement ainsi que de nos conditions générales de vente.</p>
+                <p><em>Tout ce que vous devez savoir sur les remboursements et les retours.</em></p>
+                <h2>1. Politique générale</h2>
+                <p>Compte tenu de la nature de nos produits, les retours ne sont généralement pas possibles. Cependant, en cas de défaut ou d'erreur de notre part, nous vous proposerons une solution adaptée.</p>
+                <h2>2. Produits endommagés à la livraison</h2>
+                <p>Contactez notre service client dans les 48 heures avec photos à l'appui.</p>
+                <h2>3. Procédure de retour</h2>
+                <p>Contactez-nous à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a> avec votre numéro de commande et le motif du retour.</p>
+                <h2>4. Remboursements</h2>
+                <p>Après approbation, le remboursement sera traité sous 14 jours ouvrés sur le moyen de paiement d'origine.</p>
+                <h2>5. Annulation de commande</h2>
+                <p>Une commande peut être annulée uniquement avant son expédition.</p>
+                <h2>6. Contact</h2>
+                <p>Email : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a> ou WhatsApp.</p>
             """),
-
             "politique-confidentialite": ("Politique de confidentialité", """
-                <p><em>Vos données, notre responsabilité. Chez Monjaroo.shop, nous accordons une grande importance à la protection de votre vie privée et nous nous engageons à protéger vos données personnelles.</em></p>
-
+                <p><em>Vos données, notre responsabilité.</em></p>
                 <h2>1. Quelles données collectons-nous ?</h2>
-                <p>Pour traiter et livrer votre commande, nous ne collectons que les données strictement nécessaires pour vous fournir un service de qualité :</p>
-                <ul>
-                  <li><strong>Nom et adresse :</strong> pour que votre commande soit livrée correctement.</li>
-                  <li><strong>Adresse e-mail :</strong> pour vous envoyer des mises à jour concernant votre commande.</li>
-                  <li><strong>Numéro de téléphone :</strong> si nécessaire, pour une communication rapide.</li>
-                  <li><strong>Informations de paiement :</strong> nécessaires au traitement du paiement (non conservées par nos soins).</li>
-                </ul>
-
+                <p>Nom, adresse, email, téléphone — uniquement les données nécessaires au traitement des commandes.</p>
                 <h2>2. Comment utilisons-nous vos données ?</h2>
-                <p>Vos données seront utilisées exclusivement pour les finalités suivantes :</p>
-                <ul>
-                  <li><strong>Traitement des commandes :</strong> vos nom, adresse et coordonnées sont utilisés pour traiter votre commande et la livrer à temps.</li>
-                  <li><strong>Communication :</strong> nous vous tiendrons informé(e) de l'état de votre commande par e-mail.</li>
-                  <li><strong>Service client :</strong> si nécessaire, nous utilisons vos données pour répondre à vos questions.</li>
-                </ul>
-
-                <h2>3. Protection et sécurité des données</h2>
-                <p>Nous prenons des mesures de sécurité approfondies pour protéger vos données contre la perte, l'utilisation abusive et l'accès non autorisé :</p>
-                <ul>
-                  <li><strong>Chiffrement SSL :</strong> notre site web utilise le chiffrement SSL pour transmettre vos données en toute sécurité.</li>
-                  <li><strong>Traitement sécurisé des paiements :</strong> les données de paiement sont traitées par des prestataires fiables et sécurisés.</li>
-                  <li><strong>Contrôle d'accès :</strong> seuls les employés autorisés ont accès à vos données.</li>
-                </ul>
-
-                <h2>4. Partage de données avec des tiers</h2>
-                <p>Nous traitons vos données avec le plus grand soin et ne les partageons pas avec des tiers, sauf lorsque cela est strictement nécessaire :</p>
-                <ul>
-                  <li><strong>Services de livraison :</strong> seules les données nécessaires sont partagées avec les transporteurs.</li>
-                  <li><strong>Prestataires de paiement :</strong> afin de traiter des paiements sécurisés et fiables.</li>
-                </ul>
-
-                <h2>5. Durée de conservation des données</h2>
-                <p>Vos données ne seront pas conservées plus longtemps que nécessaire aux fins pour lesquelles elles ont été collectées. Dès que la commande aura été traitée et que les délais légaux de conservation seront expirés, vos données seront supprimées ou anonymisées.</p>
-
+                <p>Traitement des commandes, communication, service client.</p>
+                <h2>3. Protection et sécurité</h2>
+                <p>Chiffrement SSL, prestataires sécurisés, contrôle d'accès strict.</p>
+                <h2>4. Partage avec des tiers</h2>
+                <p>Uniquement avec les transporteurs et prestataires de paiement.</p>
+                <h2>5. Durée de conservation</h2>
+                <p>Vos données ne seront pas conservées plus longtemps que nécessaire.</p>
                 <h2>6. Vos droits</h2>
-                <p>Vous disposez de différents droits concernant vos données personnelles :</p>
-                <ul>
-                  <li><strong>Accès et rectification :</strong> vous pouvez demander l'accès à vos données et les faire rectifier si nécessaire.</li>
-                  <li><strong>Suppression des données :</strong> dans certains cas, vous pouvez nous demander de supprimer vos données.</li>
-                  <li><strong>Opposition au traitement :</strong> si vous vous opposez à l'utilisation de vos données, vous pouvez nous contacter.</li>
-                </ul>
-                <p>Pour exercer vos droits, vous pouvez envoyer une demande à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a>. Nous vous répondrons dans les meilleurs délais, et au plus tard sous quatre semaines.</p>
-
-                <h2>7. Cookies et suivi</h2>
-                <p>Notre boutique en ligne utilise des cookies fonctionnels de manière limitée afin d'améliorer votre expérience utilisateur, notamment pour mémoriser votre panier. Nous n'utilisons pas de cookies de suivi qui collectent des données personnelles sans votre consentement.</p>
-
+                <p>Accès, rectification, suppression, opposition. Écrivez à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a>.</p>
+                <h2>7. Cookies</h2>
+                <p>Cookies fonctionnels uniquement (panier).</p>
                 <h2>8. Contact</h2>
-                <p>Pour toute question concernant notre politique de confidentialité ou vos données, veuillez contacter notre service client à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a>.</p>
-            """),
-
-            "questions-equitables": ("Questions équitables", """
-                <h2>Notre engagement</h2>
-                <p>Chez Monjaroo.shop, nous appliquons un principe de traitement équitable de toutes vos demandes : réclamations, questions, litiges ou suggestions.</p>
-                <ul>
-                  <li>Vous répondre dans un délai maximum de 48 heures ouvrées</li>
-                  <li>Traiter chaque demande avec la même attention, quelle que soit sa nature</li>
-                  <li>Vous fournir une réponse claire, honnête et documentée</li>
-                  <li>Rechercher une solution amiable avant toute action judiciaire</li>
-                </ul>
-
-                <h2>Comment nous contacter ?</h2>
-                <p>Pour toute question équitable, contactez-nous par :</p>
-                <ul>
-                  <li>📧 E-mail : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a></li>
-                  <li>📞 Téléphone : <a href="tel:+33644690692">+33 6 44 69 06 92</a></li>
-                  <li>💬 WhatsApp : disponible 24h/24 via le bouton flottant</li>
-                </ul>
-
-                <h2>Médiation</h2>
-                <p>En cas de désaccord persistant, vous pouvez faire appel gratuitement à un médiateur de la consommation agréé, conformément aux articles L.611-1 et suivants du Code de la consommation français.</p>
-
-                <h2>Notre promesse</h2>
-                <p>Nous croyons qu'une relation client durable repose sur la transparence et l'équité. Chaque retour, chaque remarque compte pour améliorer nos services.</p>
+                <p>Pour toute question : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a></p>
             """),
         }
         for slug, (titre, contenu) in pages.items():
             if not Page.query.filter_by(slug=slug).first():
                 db.session.add(Page(titre=titre, slug=slug, contenu=contenu, afficher_menu=False))
 
-        # ---------- FAQ ----------
+        # FAQ
         if not FAQ.query.first():
             db.session.add_all([
                 FAQ(question="Quels produits propose la boutique Monjaroo ?",
-                    reponse="Nous proposons une large gamme de produits de bien-être : peptides pour la recherche, médicaments, compléments alimentaires et pilules. Chaque produit est rigoureusement sélectionné pour sa qualité.",
-                    ordre=1),
+                    reponse="Nous proposons une large gamme de produits de bien-être : peptides pour la recherche, médicaments, compléments alimentaires et pilules.", ordre=1),
                 FAQ(question="Vos produits sont-ils sûrs et homologués ?",
-                    reponse="Tous nos produits proviennent de fournisseurs de confiance et respectent les normes de qualité les plus strictes. Chaque lot est vérifié avant expédition. Nous vous recommandons toutefois de consulter un professionnel de santé avant toute utilisation.",
-                    ordre=2),
+                    reponse="Tous nos produits proviennent de fournisseurs de confiance et respectent les normes de qualité les plus strictes.", ordre=2),
                 FAQ(question="Combien de temps prend la livraison ?",
-                    reponse="Les commandes sont traitées sous 1 à 2 jours ouvrés. La livraison standard prend généralement entre 3 et 7 jours, selon votre adresse. Vous recevrez un numéro de suivi dès l'expédition de votre commande.",
-                    ordre=3),
+                    reponse="Les commandes sont traitées sous 1 à 2 jours ouvrés. La livraison standard prend généralement entre 3 et 7 jours.", ordre=3),
                 FAQ(question="Proposez-vous la livraison internationale ?",
-                    reponse="Oui, nous livrons dans la plupart des pays européens et certaines destinations internationales. Les frais et délais varient selon le pays et sont indiqués clairement lors de la commande.",
-                    ordre=4),
+                    reponse="Oui, nous livrons dans la plupart des pays européens et certaines destinations internationales.", ordre=4),
                 FAQ(question="Quels modes de paiement acceptez-vous ?",
-                    reponse="Nous acceptons plusieurs modes de paiement sécurisés (carte bancaire, virement, et autres solutions proposées au moment de la commande). Contactez-nous par WhatsApp pour connaître les options disponibles dans votre pays.",
-                    ordre=5),
+                    reponse="Nous acceptons plusieurs modes de paiement sécurisés (carte bancaire, virement). Contactez-nous par WhatsApp pour connaître les options disponibles.", ordre=5),
                 FAQ(question="Puis-je retourner ou échanger ma commande ?",
-                    reponse="En raison de la nature de nos produits, les retours ne sont acceptés qu'en cas d'erreur de notre part ou de produit défectueux. Contactez notre service client dans les 48 heures suivant la réception avec photos à l'appui.",
-                    ordre=6),
+                    reponse="En raison de la nature de nos produits, les retours ne sont acceptés qu'en cas d'erreur de notre part ou de produit défectueux.", ordre=6),
                 FAQ(question="Comment puis-je contacter le service client ?",
-                    reponse="Notre équipe est joignable 24h/24 et 7j/7 : par WhatsApp (bouton flottant en bas à droite), par e-mail à info@monjaroo.shop, ou par téléphone au +33 6 44 69 06 92.",
-                    ordre=7),
+                    reponse="Par WhatsApp (bouton flottant), par email à info@monjaroo.shop, ou par téléphone au +33 6 44 69 06 92.", ordre=7),
                 FAQ(question="Vos compléments alimentaires conviennent-ils à tout le monde ?",
-                    reponse="Nos produits sont destinés à un usage adulte. Si vous êtes enceinte, allaitante, mineure, ou sous traitement médical, consultez impérativement un médecin avant toute utilisation. En cas de doute, notre équipe reste à votre disposition.",
-                    ordre=8),
+                    reponse="Nos produits sont destinés à un usage adulte. Consultez un médecin en cas de doute.", ordre=8),
                 FAQ(question="Comment dois-je conserver mes compléments alimentaires ?",
-                    reponse="Conservez vos produits dans un endroit sec, à l'abri de la lumière et à température ambiante (15-25°C). Respectez les indications spécifiques figurant sur chaque emballage et vérifiez la date de péremption avant utilisation.",
-                    ordre=9),
+                    reponse="Conservez vos produits dans un endroit sec, à l'abri de la lumière et à température ambiante (15-25°C).", ordre=9),
             ])
 
-        # ---------- AVIS (80 avis) ----------
+        # AVIS
         if not Avis.query.first():
             prenoms = ["Daniel R.", "Saar B.", "Dennis W.", "Marie L.", "Julien K.", "Sophie M.", "Antoine D.", "Camille B.", "Lucas P.", "Emma T.",
                        "Hugo V.", "Léa R.", "Nathan G.", "Chloé F.", "Maxime H.", "Manon S.", "Théo J.", "Sarah N.", "Alexandre C.", "Inès B.",
@@ -3627,69 +3435,47 @@ def seed():
                                     note=5 if i % 8 else 4,
                                     texte=textes[i % len(textes)], ordre=i, valide=True))
 
-        # ---------- ARTICLES BLOG ----------
+        # ARTICLES BLOG
         if not Article.query.first():
             db.session.add_all([
-                Article(
-                    titre="Que sont les peptides ?",
-                    slug="que-sont-les-peptides",
-                    categorie="blog peptides",
-                    extrait="Les peptides sont de courtes chaînes d'acides aminés. Les acides aminés sont les constituants des protéines dans l'organisme. Les peptides sont plus courts que les protéines. De par leur petite taille, ils peuvent être synthétisés plus rapidement…",
-                    contenu="""
-                        <p><strong>Que sont les peptides ?</strong></p>
-                        <p>Les peptides sont de courtes chaînes d'acides aminés. Les acides aminés sont les constituants des protéines dans l'organisme. Les peptides sont plus courts que les protéines. De par leur petite taille, ils peuvent être synthétisés plus rapidement que les protéines complètes et jouent un rôle clé dans de nombreux processus biologiques.</p>
-                        <p>Dans le domaine de la recherche scientifique, les peptides sont étudiés pour leur capacité à interagir avec des récepteurs spécifiques, à moduler des voies métaboliques et à influencer divers mécanismes physiologiques. Leur polyvalence en fait un outil précieux pour les chercheurs en biochimie, en biologie cellulaire et en pharmacologie.</p>
-                        <p>Notre boutique propose une sélection de peptides destinés exclusivement à la recherche, rigoureusement contrôlés pour garantir pureté et fiabilité.</p>
-                    """,
-                    date=datetime(2026, 1, 22)
-                ),
-                Article(
-                    titre="Acheter des médicaments en ligne : sûr, discret et fiable",
-                    slug="acheter-medicaments-en-ligne",
-                    categorie="Médicament",
-                    extrait="De plus en plus de personnes choisissent d'acheter leurs médicaments en ligne. Non seulement pour des raisons pratiques, mais aussi pour préserver leur vie privée, leur discrétion et gagner du temps. Commander en ligne permet de se soigner en toute sérénité…",
-                    contenu="""
-                        <p><strong>Acheter des médicaments en ligne : sûr, discret et fiable</strong></p>
-                        <p>De plus en plus de personnes choisissent d'acheter leurs médicaments en ligne. Non seulement pour des raisons pratiques, mais aussi pour préserver leur vie privée, leur discrétion et gagner du temps. Commander en ligne permet de se soigner en toute sérénité, sans avoir à se déplacer et sans jugement.</p>
-                        <p>Chez Monjaroo.shop, nous garantissons :</p>
-                        <ul>
-                            <li>Une <strong>livraison discrète</strong> dans un emballage neutre</li>
-                            <li>Des <strong>produits authentiques</strong> provenant de fournisseurs vérifiés</li>
-                            <li>Un <strong>service client réactif</strong> disponible 24h/24 par WhatsApp</li>
-                            <li>Des <strong>prix compétitifs</strong> sans compromis sur la qualité</li>
-                        </ul>
-                        <p>Notre objectif est de rendre l'accès aux produits de santé simple, sûr et confidentiel pour tous nos clients.</p>
-                    """,
-                    date=datetime(2025, 12, 28)
-                ),
-                Article(
-                    titre="Que sont les peptides et pourquoi sont-ils de plus en plus populaires ?",
-                    slug="pourquoi-peptides-populaires",
-                    categorie="peptides",
-                    extrait="Les peptides connaissent une popularité croissante ces dernières années. Mais que sont exactement les peptides, et pourquoi en entend-on si souvent parler ? Dans cet article, nous vous expliquons clairement ce que sont les peptides…",
-                    contenu="""
-                        <p><strong>Que sont les peptides et pourquoi sont-ils de plus en plus populaires ?</strong></p>
-                        <p>Les peptides connaissent une popularité croissante ces dernières années. Mais que sont exactement les peptides, et pourquoi en entend-on si souvent parler ?</p>
-                        <p>Les peptides sont de courtes chaînes d'acides aminés qui agissent comme des messagers dans l'organisme. Ils interviennent dans de nombreux processus biologiques : régulation hormonale, réponse immunitaire, métabolisme, cicatrisation, etc.</p>
-                        <p><strong>Pourquoi cet engouement ?</strong></p>
-                        <ul>
-                            <li><strong>Recherche scientifique avancée :</strong> les peptides sont au cœur de nombreuses études sur le métabolisme et la santé.</li>
-                            <li><strong>Applications ciblées :</strong> leur spécificité permet d'agir précisément sur des mécanismes biologiques.</li>
-                            <li><strong>Innovation thérapeutique :</strong> ils ouvrent la voie à de nouvelles approches médicales.</li>
-                        </ul>
-                        <p>Chez Monjaroo.shop, nous suivons de près ces évolutions et proposons une gamme de peptides destinés exclusivement à la recherche.</p>
-                    """,
-                    date=datetime(2025, 12, 4)
-                ),
+                Article(titre="Que sont les peptides ?", slug="que-sont-les-peptides",
+                        categorie="blog peptides",
+                        extrait="Les peptides sont de courtes chaînes d'acides aminés. Les acides aminés sont les constituants des protéines dans l'organisme...",
+                        contenu="<p>Les peptides sont de courtes chaînes d'acides aminés qui jouent un rôle clé dans de nombreux processus biologiques.</p>",
+                        date=datetime(2026, 1, 22)),
+                Article(titre="Acheter des médicaments en ligne : sûr, discret et fiable",
+                        slug="acheter-medicaments-en-ligne", categorie="Médicament",
+                        extrait="De plus en plus de personnes choisissent d'acheter leurs médicaments en ligne...",
+                        contenu="<p>Acheter des médicaments en ligne est pratique, discret et sécurisé.</p>",
+                        date=datetime(2025, 12, 28)),
+                Article(titre="Que sont les peptides et pourquoi sont-ils de plus en plus populaires ?",
+                        slug="pourquoi-peptides-populaires", categorie="peptides",
+                        extrait="Les peptides connaissent une popularité croissante ces dernières années...",
+                        contenu="<p>Les peptides connaissent une popularité croissante dans le domaine de la recherche.</p>",
+                        date=datetime(2025, 12, 4)),
             ])
 
         db.session.commit()
-        print("SEED OK")
+        print(">>> SEED OK <<<")
+
+    except Exception as e:
+        print(f">>> SEED ERREUR: {e} <<<")
+        import traceback
+        traceback.print_exc()
 
 
 # =============================================================
-# POINT D'ENTRÉE
+# INITIALISATION AU DEMARRAGE (obligatoire pour Render/gunicorn)
+# =============================================================
+with app.app_context():
+    try:
+        seed()
+    except Exception as e:
+        print(f">>> INIT SEED ERREUR: {e} <<<")
+
+
+# =============================================================
+# POINT D'ENTRÉE LOCAL
 # =============================================================
 if __name__ == "__main__":
-    seed()
     app.run(debug=True, host="0.0.0.0", port=5000)
