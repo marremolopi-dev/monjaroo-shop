@@ -1,5 +1,6 @@
 # =============================================================
-#  Monjaroo.shop — app.py FINAL v14 (compatible Render)
+#  Monjaroo.shop — app.py v15
+#  + Galerie 5 photos par produit avec carrousel auto
 # =============================================================
 
 from flask import (Flask, render_template, request, redirect, url_for,
@@ -16,20 +17,17 @@ import urllib.request
 import json as _json
 
 # =============================================================
-# CHEMINS (compatible Render + local)
+# CHEMINS
 # =============================================================
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-# Sur Render, BASE_DIR = /opt/render/project/src
-# En local, BASE_DIR = C:\Users\User\Desktop\peptide
-
 UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+MAX_PHOTOS_PAR_PRODUIT = 5
 
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-moi-en-prod-!!!")
-    # Sur Render, on utilise un chemin absolu pour SQLite
     SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(BASE_DIR, "monjaroo.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
@@ -51,6 +49,7 @@ class Config:
     WHATSAPP_MESSAGE = "Bonjour, je souhaite des informations sur vos produits Monjaroo.shop"
 
     UPLOAD_FOLDER = UPLOAD_DIR
+    MAX_PHOTOS = MAX_PHOTOS_PAR_PRODUIT
 
     LANGUAGES = {
         "fr": ("Français", "🇫🇷"),
@@ -98,10 +97,12 @@ ICONS = {
     "eye-off": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/><path d='M1 1l22 22'/></svg>",
     "check": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m4 12 5 5 11-11'/></svg>",
     "shield": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z'/><path d='m9 12 2 2 4-4'/></svg>",
+    "camera": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'/><circle cx='12' cy='13' r='4'/></svg>",
+    "trash": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z'/></svg>",
 }
 
 # =============================================================
-# TRADUCTIONS (6 LANGUES)
+# TRADUCTIONS
 # =============================================================
 T = {
     "fr": {
@@ -130,7 +131,7 @@ T = {
         "newsletter_sub": "Inscrivez-vous à notre newsletter pour recevoir nos offres exclusives.",
         "subscribe": "S'inscrire", "email_ph": "Votre adresse e-mail",
         "about_us": "À propos de nous", "about_title": "Promouvoir la santé par la qualité et les soins",
-        "about_text": "Chez Monjaroo.shop, nous croyons que la véritable santé commence par la confiance. Notre mission est de proposer des produits sûrs, efficaces et testés pour une vie quotidienne plus saine et équilibrée.",
+        "about_text": "Chez Monjaroo.shop, nous croyons que la véritable santé commence par la confiance.",
         "discover": "Découvrez nos peptides et médicaments",
         "contact_us": "Contactez-nous", "all_rights": "Tous droits réservés",
         "full_name": "Nom complet", "email": "Email", "phone": "Téléphone",
@@ -143,7 +144,7 @@ T = {
         "passwords_dont_match": "Les mots de passe ne correspondent pas.",
         "you_are_logged": "Vous êtes connecté.",
         "order_info_title": "Vos informations de livraison",
-        "order_info_sub": "Remplissez ces informations puis cliquez sur le bouton vert pour finaliser votre commande via WhatsApp.",
+        "order_info_sub": "Remplissez ces informations puis cliquez sur le bouton vert.",
         "pay_whatsapp": "Valider et envoyer par WhatsApp",
         "order_summary": "Récapitulatif de commande",
         "thank_you": "Merci pour votre commande !",
@@ -162,302 +163,323 @@ T = {
         "read_more": "En savoir plus",
         "blog_intro": "Pour en savoir plus, consultez nos articles informatifs.",
         "faq_intro": "Réponses à vos questions les plus importantes",
-        "faq_sub": "Trouvez rapidement les réponses aux questions fréquemment posées sur nos produits.",
+        "faq_sub": "Trouvez rapidement les réponses aux questions fréquemment posées.",
+        "gallery": "Galerie photos",
+        "photos_upload": "Ajouter jusqu'à 5 photos",
+        "photos_max": "Maximum 5 photos par produit",
+        "photos_current": "Photos actuelles",
+        "upload": "Téléverser",
+        "delete": "Supprimer",
     },
     "en": {
         "welcome": "Welcome to the Monjaroo shop",
         "hero_title": "Premium wellness products for daily health",
-        "hero_text": "Discover high-quality supplements and wellness products, rigorously tested and approved, to support your body, boost your energy and promote lasting vitality.",
-        "buy_now": "Shop now",
-        "search": "Search", "search_ph": "Search for a product...",
+        "hero_text": "Discover high-quality supplements and wellness products, rigorously tested and approved.",
+        "buy_now": "Shop now", "search": "Search", "search_ph": "Search for a product...",
         "login": "Sign in", "register": "Sign up", "logout": "Sign out",
         "account": "My account", "cart": "Cart", "empty_cart": "Your cart is empty.",
         "home": "Home", "meds": "Medications", "peptides": "Peptides",
-        "pills": "Erection pills", "general": "General",
-        "blog": "Blog", "contact": "Contact",
-        "cgv": "Terms & Conditions", "returns": "Returns & refunds",
-        "privacy": "Privacy policy", "fair": "Fair questions",
-        "faq": "Frequently asked questions",
-        "reviews": "Customer reviews", "reviews_title": "What our customers say",
+        "pills": "Erection pills", "general": "General", "blog": "Blog", "contact": "Contact",
+        "cgv": "Terms", "returns": "Returns", "privacy": "Privacy", "fair": "Fair questions",
+        "faq": "FAQ",
+        "reviews": "Reviews", "reviews_title": "What our customers say",
         "leave_review": "Leave your review", "post_review": "Post my review",
         "add_to_cart": "Add to cart", "your_cart": "Your cart",
         "checkout": "Checkout", "order_wa": "Order via WhatsApp",
         "features_home": "Trusted shop offering quality products.",
-        "features_price": "Affordable and attractive prices for all customers.",
+        "features_price": "Affordable prices for all.",
         "features_ship": "Free express delivery with tracking.",
         "features_support": "24/7 online support.",
         "newsletter": "Get 10% off your next order",
-        "newsletter_sub": "Subscribe to our newsletter to receive exclusive offers.",
-        "subscribe": "Subscribe", "email_ph": "Your email address",
+        "newsletter_sub": "Subscribe to our newsletter.",
+        "subscribe": "Subscribe", "email_ph": "Your email",
         "about_us": "About us", "about_title": "Promoting health through quality and care",
-        "about_text": "At Monjaroo.shop, we believe true health starts with trust. Our mission is to provide safe, effective and tested products for a healthier and more balanced daily life.",
+        "about_text": "At Monjaroo.shop, we believe true health starts with trust.",
         "discover": "Discover our peptides and medications",
         "contact_us": "Contact us", "all_rights": "All rights reserved",
         "full_name": "Full name", "email": "Email", "phone": "Phone",
         "address": "Delivery address", "password": "Password", "confirm_password": "Confirm password",
         "send": "Send", "message": "Message", "total": "Total", "quantity": "Quantity",
-        "welcome_back": "Welcome back!", "invalid_credentials": "Invalid email or password.",
-        "email_exists": "This email is already in use.",
-        "account_created": "Account created successfully!",
-        "passwords_dont_match": "Passwords do not match.",
+        "welcome_back": "Welcome back!", "invalid_credentials": "Invalid credentials.",
+        "email_exists": "Email already used.",
+        "account_created": "Account created!",
+        "passwords_dont_match": "Passwords don't match.",
         "you_are_logged": "You are logged in.",
         "order_info_title": "Your delivery information",
-        "order_info_sub": "Fill in this information then click the green button to finalize via WhatsApp.",
-        "pay_whatsapp": "Confirm and send via WhatsApp",
+        "order_info_sub": "Fill in then click the green button.",
+        "pay_whatsapp": "Confirm via WhatsApp",
         "order_summary": "Order summary",
-        "thank_you": "Thank you for your order!",
-        "order_saved": "Your order has been successfully recorded.",
+        "thank_you": "Thank you!",
+        "order_saved": "Your order has been recorded.",
         "last_step": "Last step: send us your order via WhatsApp",
-        "we_respond": "We will respond immediately with payment details.",
-        "send_whatsapp": "Send my order via WhatsApp",
+        "we_respond": "We will respond with payment details.",
+        "send_whatsapp": "Send order via WhatsApp",
         "my_orders": "My orders", "no_orders": "No orders yet.",
         "page_not_found": "Page not found", "error_404": "Error 404",
-        "back_home": "Back to home",
+        "back_home": "Back home",
         "select_options": "Select options",
         "product_variants": "This product has several variants.",
-        "guest_note": "You don't need an account to order.",
+        "guest_note": "No account needed to order.",
         "contact_desc": "A question? Our team answers 24/7.",
-        "message_sent": "Message sent! We will respond shortly.",
+        "message_sent": "Message sent!",
         "read_more": "Read more",
-        "blog_intro": "To learn more, read our informative articles.",
-        "faq_intro": "Answers to your most important questions",
-        "faq_sub": "Quickly find answers to frequently asked questions about our products.",
+        "blog_intro": "Read our informative articles.",
+        "faq_intro": "Answers to your questions",
+        "faq_sub": "Find answers to frequently asked questions.",
+        "gallery": "Photo gallery",
+        "photos_upload": "Add up to 5 photos",
+        "photos_max": "Maximum 5 photos per product",
+        "photos_current": "Current photos",
+        "upload": "Upload",
+        "delete": "Delete",
     },
     "nl": {
-        "welcome": "Welkom in de Monjaroo-winkel",
-        "hero_title": "Premium wellnessproducten voor dagelijkse gezondheid",
-        "hero_text": "Ontdek hoogwaardige supplementen en wellnessproducten, grondig getest en goedgekeurd, om uw lichaam te ondersteunen, uw energie te stimuleren en een blijvende vitaliteit te bevorderen.",
-        "buy_now": "Nu kopen",
-        "search": "Zoeken", "search_ph": "Zoek een product...",
+        "welcome": "Welkom bij Monjaroo",
+        "hero_title": "Premium wellnessproducten",
+        "hero_text": "Ontdek hoogwaardige supplementen.",
+        "buy_now": "Nu kopen", "search": "Zoeken", "search_ph": "Zoek een product...",
         "login": "Inloggen", "register": "Registreren", "logout": "Uitloggen",
-        "account": "Mijn account", "cart": "Winkelwagen", "empty_cart": "Uw winkelwagen is leeg.",
+        "account": "Mijn account", "cart": "Winkelwagen", "empty_cart": "Winkelwagen is leeg.",
         "home": "Home", "meds": "Medicijnen", "peptides": "Peptiden",
-        "pills": "Erectiepillen", "general": "Algemeen",
-        "blog": "Blog", "contact": "Contact",
-        "cgv": "Algemene voorwaarden", "returns": "Retouren en terugbetalingen",
-        "privacy": "Privacybeleid", "fair": "Eerlijke vragen",
-        "faq": "Veelgestelde vragen",
-        "reviews": "Klantbeoordelingen", "reviews_title": "Wat onze klanten zeggen",
-        "leave_review": "Laat uw beoordeling achter", "post_review": "Beoordeling plaatsen",
-        "add_to_cart": "Toevoegen aan winkelwagen", "your_cart": "Uw winkelwagen",
+        "pills": "Erectiepillen", "general": "Algemeen", "blog": "Blog", "contact": "Contact",
+        "cgv": "Voorwaarden", "returns": "Retouren", "privacy": "Privacy", "fair": "Eerlijke vragen",
+        "faq": "FAQ",
+        "reviews": "Beoordelingen", "reviews_title": "Wat klanten zeggen",
+        "leave_review": "Beoordeling achterlaten", "post_review": "Plaatsen",
+        "add_to_cart": "Toevoegen", "your_cart": "Winkelwagen",
         "checkout": "Afrekenen", "order_wa": "Bestellen via WhatsApp",
-        "features_home": "Betrouwbare winkel met kwaliteitsproducten.",
-        "features_price": "Betaalbare en aantrekkelijke prijzen voor alle klanten.",
-        "features_ship": "Gratis expreslevering met tracking.",
-        "features_support": "24/7 online ondersteuning.",
-        "newsletter": "Ontvang 10% korting op uw volgende bestelling",
-        "newsletter_sub": "Schrijf u in voor onze nieuwsbrief voor exclusieve aanbiedingen.",
-        "subscribe": "Inschrijven", "email_ph": "Uw e-mailadres",
-        "about_us": "Over ons", "about_title": "Gezondheid bevorderen door kwaliteit en zorg",
-        "about_text": "Bij Monjaroo.shop geloven we dat echte gezondheid begint met vertrouwen. Onze missie is om veilige, effectieve en geteste producten te bieden voor een gezonder en evenwichtiger dagelijks leven.",
-        "discover": "Ontdek onze peptiden en medicijnen",
+        "features_home": "Betrouwbare winkel.",
+        "features_price": "Betaalbare prijzen.",
+        "features_ship": "Gratis expreslevering.",
+        "features_support": "24/7 ondersteuning.",
+        "newsletter": "Ontvang 10% korting",
+        "newsletter_sub": "Schrijf u in voor onze nieuwsbrief.",
+        "subscribe": "Inschrijven", "email_ph": "Uw e-mail",
+        "about_us": "Over ons", "about_title": "Gezondheid bevorderen",
+        "about_text": "Wij geloven in vertrouwen.",
+        "discover": "Ontdek onze producten",
         "contact_us": "Contacteer ons", "all_rights": "Alle rechten voorbehouden",
         "full_name": "Volledige naam", "email": "E-mail", "phone": "Telefoon",
-        "address": "Leveringsadres", "password": "Wachtwoord", "confirm_password": "Bevestig wachtwoord",
+        "address": "Adres", "password": "Wachtwoord", "confirm_password": "Bevestig",
         "send": "Verzenden", "message": "Bericht", "total": "Totaal", "quantity": "Aantal",
-        "welcome_back": "Welkom terug!", "invalid_credentials": "Ongeldig e-mailadres of wachtwoord.",
-        "email_exists": "Dit e-mailadres is al in gebruik.",
-        "account_created": "Account succesvol aangemaakt!",
+        "welcome_back": "Welkom terug!", "invalid_credentials": "Ongeldig.",
+        "email_exists": "E-mail al in gebruik.",
+        "account_created": "Account aangemaakt!",
         "passwords_dont_match": "Wachtwoorden komen niet overeen.",
         "you_are_logged": "U bent ingelogd.",
-        "order_info_title": "Uw leveringsgegevens",
-        "order_info_sub": "Vul deze gegevens in en klik op de groene knop om via WhatsApp te bestellen.",
-        "pay_whatsapp": "Bevestigen en verzenden via WhatsApp",
-        "order_summary": "Overzicht van bestelling",
-        "thank_you": "Bedankt voor uw bestelling!",
-        "order_saved": "Uw bestelling is succesvol geregistreerd.",
-        "last_step": "Laatste stap: verzend uw bestelling via WhatsApp",
-        "we_respond": "We reageren onmiddellijk met betalingsgegevens.",
-        "send_whatsapp": "Mijn bestelling verzenden via WhatsApp",
-        "my_orders": "Mijn bestellingen", "no_orders": "Nog geen bestellingen.",
+        "order_info_title": "Uw gegevens",
+        "order_info_sub": "Vul in en klik op de groene knop.",
+        "pay_whatsapp": "Bevestigen via WhatsApp",
+        "order_summary": "Overzicht",
+        "thank_you": "Bedankt!",
+        "order_saved": "Bestelling opgeslagen.",
+        "last_step": "Laatste stap: verzend via WhatsApp",
+        "we_respond": "We reageren met betalingsgegevens.",
+        "send_whatsapp": "Verzenden via WhatsApp",
+        "my_orders": "Mijn bestellingen", "no_orders": "Geen bestellingen.",
         "page_not_found": "Pagina niet gevonden", "error_404": "Fout 404",
         "back_home": "Terug naar home",
         "select_options": "Selecteer opties",
-        "product_variants": "Dit product heeft meerdere varianten.",
-        "guest_note": "U heeft geen account nodig om te bestellen.",
-        "contact_desc": "Een vraag? Ons team antwoordt 24/7.",
-        "message_sent": "Bericht verzonden! We reageren snel.",
+        "product_variants": "Meerdere varianten.",
+        "guest_note": "Geen account nodig.",
+        "contact_desc": "Vraag? Ons team antwoordt 24/7.",
+        "message_sent": "Bericht verzonden!",
         "read_more": "Lees meer",
-        "blog_intro": "Lees onze informatieve artikelen voor meer informatie.",
-        "faq_intro": "Antwoorden op uw belangrijkste vragen",
-        "faq_sub": "Vind snel antwoorden op veelgestelde vragen over onze producten.",
+        "blog_intro": "Lees onze artikelen.",
+        "faq_intro": "Antwoorden op uw vragen",
+        "faq_sub": "Vind snel antwoorden.",
+        "gallery": "Fotogalerij",
+        "photos_upload": "Max 5 foto's toevoegen",
+        "photos_max": "Max 5 foto's per product",
+        "photos_current": "Huidige foto's",
+        "upload": "Uploaden",
+        "delete": "Verwijderen",
     },
     "de": {
-        "welcome": "Willkommen im Monjaroo-Shop",
-        "hero_title": "Premium-Wellnessprodukte für die tägliche Gesundheit",
-        "hero_text": "Entdecken Sie hochwertige Nahrungsergänzungsmittel und Wellnessprodukte, die streng getestet und zugelassen sind, um Ihren Körper zu unterstützen, Ihre Energie zu steigern und eine nachhaltige Vitalität zu fördern.",
-        "buy_now": "Jetzt kaufen",
-        "search": "Suchen", "search_ph": "Produkt suchen...",
+        "welcome": "Willkommen bei Monjaroo",
+        "hero_title": "Premium-Wellnessprodukte",
+        "hero_text": "Entdecken Sie hochwertige Wellnessprodukte.",
+        "buy_now": "Jetzt kaufen", "search": "Suchen", "search_ph": "Produkt suchen...",
         "login": "Anmelden", "register": "Registrieren", "logout": "Abmelden",
-        "account": "Mein Konto", "cart": "Warenkorb", "empty_cart": "Ihr Warenkorb ist leer.",
+        "account": "Mein Konto", "cart": "Warenkorb", "empty_cart": "Warenkorb ist leer.",
         "home": "Startseite", "meds": "Medikamente", "peptides": "Peptide",
-        "pills": "Erektionspillen", "general": "Allgemein",
-        "blog": "Blog", "contact": "Kontakt",
-        "cgv": "AGB", "returns": "Rückgabe und Erstattung",
-        "privacy": "Datenschutzerklärung", "fair": "Faire Fragen",
-        "faq": "Häufig gestellte Fragen",
-        "reviews": "Kundenbewertungen", "reviews_title": "Was unsere Kunden sagen",
-        "leave_review": "Bewertung abgeben", "post_review": "Bewertung veröffentlichen",
-        "add_to_cart": "In den Warenkorb", "your_cart": "Ihr Warenkorb",
+        "pills": "Erektionspillen", "general": "Allgemein", "blog": "Blog", "contact": "Kontakt",
+        "cgv": "AGB", "returns": "Rückgabe", "privacy": "Datenschutz", "fair": "Faire Fragen",
+        "faq": "FAQ",
+        "reviews": "Bewertungen", "reviews_title": "Was Kunden sagen",
+        "leave_review": "Bewertung abgeben", "post_review": "Veröffentlichen",
+        "add_to_cart": "In den Warenkorb", "your_cart": "Warenkorb",
         "checkout": "Zur Kasse", "order_wa": "Über WhatsApp bestellen",
-        "features_home": "Vertrauenswürdiger Shop mit Qualitätsprodukten.",
-        "features_price": "Erschwingliche und attraktive Preise für alle Kunden.",
-        "features_ship": "Kostenloser Expressversand mit Tracking.",
-        "features_support": "24/7 Online-Support.",
-        "newsletter": "Erhalten Sie 10 % Rabatt auf Ihre nächste Bestellung",
-        "newsletter_sub": "Abonnieren Sie unseren Newsletter für exklusive Angebote.",
-        "subscribe": "Abonnieren", "email_ph": "Ihre E-Mail-Adresse",
-        "about_us": "Über uns", "about_title": "Gesundheit durch Qualität und Fürsorge fördern",
-        "about_text": "Bei Monjaroo.shop glauben wir, dass wahre Gesundheit mit Vertrauen beginnt. Unsere Mission ist es, sichere, wirksame und getestete Produkte für ein gesünderes und ausgeglicheneres tägliches Leben anzubieten.",
-        "discover": "Entdecken Sie unsere Peptide und Medikamente",
-        "contact_us": "Kontaktieren Sie uns", "all_rights": "Alle Rechte vorbehalten",
+        "features_home": "Vertrauenswürdiger Shop.",
+        "features_price": "Erschwingliche Preise.",
+        "features_ship": "Kostenloser Expressversand.",
+        "features_support": "24/7 Support.",
+        "newsletter": "Erhalten Sie 10 % Rabatt",
+        "newsletter_sub": "Abonnieren Sie unseren Newsletter.",
+        "subscribe": "Abonnieren", "email_ph": "Ihre E-Mail",
+        "about_us": "Über uns", "about_title": "Gesundheit durch Qualität",
+        "about_text": "Wir glauben an Vertrauen.",
+        "discover": "Entdecken Sie unsere Produkte",
+        "contact_us": "Kontakt", "all_rights": "Alle Rechte vorbehalten",
         "full_name": "Vollständiger Name", "email": "E-Mail", "phone": "Telefon",
-        "address": "Lieferadresse", "password": "Passwort", "confirm_password": "Passwort bestätigen",
+        "address": "Adresse", "password": "Passwort", "confirm_password": "Bestätigen",
         "send": "Senden", "message": "Nachricht", "total": "Gesamt", "quantity": "Menge",
-        "welcome_back": "Willkommen zurück!", "invalid_credentials": "Ungültige E-Mail oder Passwort.",
-        "email_exists": "Diese E-Mail wird bereits verwendet.",
-        "account_created": "Konto erfolgreich erstellt!",
+        "welcome_back": "Willkommen zurück!", "invalid_credentials": "Ungültig.",
+        "email_exists": "E-Mail bereits verwendet.",
+        "account_created": "Konto erstellt!",
         "passwords_dont_match": "Passwörter stimmen nicht überein.",
         "you_are_logged": "Sie sind angemeldet.",
-        "order_info_title": "Ihre Lieferdaten",
-        "order_info_sub": "Füllen Sie diese Daten aus und klicken Sie auf die grüne Schaltfläche für WhatsApp.",
-        "pay_whatsapp": "Bestätigen und über WhatsApp senden",
+        "order_info_title": "Ihre Daten",
+        "order_info_sub": "Ausfüllen und grüne Schaltfläche klicken.",
+        "pay_whatsapp": "Bestätigen via WhatsApp",
         "order_summary": "Bestellübersicht",
-        "thank_you": "Vielen Dank für Ihre Bestellung!",
-        "order_saved": "Ihre Bestellung wurde erfolgreich registriert.",
-        "last_step": "Letzter Schritt: Senden Sie uns Ihre Bestellung über WhatsApp",
-        "we_respond": "Wir antworten sofort mit Zahlungsdetails.",
-        "send_whatsapp": "Meine Bestellung über WhatsApp senden",
-        "my_orders": "Meine Bestellungen", "no_orders": "Noch keine Bestellungen.",
+        "thank_you": "Danke!",
+        "order_saved": "Bestellung registriert.",
+        "last_step": "Letzter Schritt: via WhatsApp senden",
+        "we_respond": "Wir antworten mit Zahlungsdetails.",
+        "send_whatsapp": "Über WhatsApp senden",
+        "my_orders": "Meine Bestellungen", "no_orders": "Keine Bestellungen.",
         "page_not_found": "Seite nicht gefunden", "error_404": "Fehler 404",
-        "back_home": "Zurück zur Startseite",
+        "back_home": "Zurück",
         "select_options": "Optionen auswählen",
-        "product_variants": "Dieses Produkt hat mehrere Varianten.",
-        "guest_note": "Sie benötigen kein Konto zum Bestellen.",
-        "contact_desc": "Eine Frage? Unser Team antwortet 24/7.",
-        "message_sent": "Nachricht gesendet! Wir antworten in Kürze.",
+        "product_variants": "Mehrere Varianten.",
+        "guest_note": "Kein Konto nötig.",
+        "contact_desc": "Frage? Unser Team antwortet 24/7.",
+        "message_sent": "Nachricht gesendet!",
         "read_more": "Mehr lesen",
-        "blog_intro": "Lesen Sie unsere informativen Artikel für weitere Informationen.",
-        "faq_intro": "Antworten auf Ihre wichtigsten Fragen",
-        "faq_sub": "Finden Sie schnell Antworten auf häufig gestellte Fragen zu unseren Produkten.",
+        "blog_intro": "Lesen Sie unsere Artikel.",
+        "faq_intro": "Antworten auf Ihre Fragen",
+        "faq_sub": "Finden Sie schnell Antworten.",
+        "gallery": "Fotogalerie",
+        "photos_upload": "Max 5 Fotos hochladen",
+        "photos_max": "Max 5 Fotos pro Produkt",
+        "photos_current": "Aktuelle Fotos",
+        "upload": "Hochladen",
+        "delete": "Löschen",
     },
     "it": {
-        "welcome": "Benvenuto nel negozio Monjaroo",
-        "hero_title": "Prodotti benessere premium per la salute quotidiana",
-        "hero_text": "Scopri integratori e prodotti benessere di alta qualità, rigorosamente testati e approvati, per sostenere il tuo corpo, stimolare la tua energia e favorire una vitalità duratura.",
-        "buy_now": "Acquista ora",
-        "search": "Cerca", "search_ph": "Cerca un prodotto...",
+        "welcome": "Benvenuto da Monjaroo",
+        "hero_title": "Prodotti benessere premium",
+        "hero_text": "Scopri prodotti benessere di alta qualità.",
+        "buy_now": "Acquista ora", "search": "Cerca", "search_ph": "Cerca prodotto...",
         "login": "Accedi", "register": "Registrati", "logout": "Esci",
-        "account": "Il mio account", "cart": "Carrello", "empty_cart": "Il tuo carrello è vuoto.",
+        "account": "Account", "cart": "Carrello", "empty_cart": "Carrello vuoto.",
         "home": "Home", "meds": "Farmaci", "peptides": "Peptidi",
-        "pills": "Pillole per l'erezione", "general": "Generale",
-        "blog": "Blog", "contact": "Contatto",
-        "cgv": "Termini e condizioni", "returns": "Resi e rimborsi",
-        "privacy": "Informativa sulla privacy", "fair": "Domande eque",
-        "faq": "Domande frequenti",
-        "reviews": "Recensioni dei clienti", "reviews_title": "Cosa dicono i nostri clienti",
-        "leave_review": "Lascia la tua recensione", "post_review": "Pubblica la recensione",
-        "add_to_cart": "Aggiungi al carrello", "your_cart": "Il tuo carrello",
-        "checkout": "Procedi all'ordine", "order_wa": "Ordina via WhatsApp",
-        "features_home": "Negozio affidabile con prodotti di qualità.",
-        "features_price": "Prezzi accessibili e interessanti per tutti i clienti.",
-        "features_ship": "Spedizione express gratuita con tracciamento.",
-        "features_support": "Supporto online 24/7.",
-        "newsletter": "Ottieni il 10% di sconto sul tuo prossimo ordine",
-        "newsletter_sub": "Iscriviti alla nostra newsletter per offerte esclusive.",
-        "subscribe": "Iscriviti", "email_ph": "Il tuo indirizzo email",
-        "about_us": "Chi siamo", "about_title": "Promuovere la salute attraverso la qualità e la cura",
-        "about_text": "Da Monjaroo.shop, crediamo che la vera salute inizi dalla fiducia. La nostra missione è offrire prodotti sicuri, efficaci e testati per una vita quotidiana più sana ed equilibrata.",
-        "discover": "Scopri i nostri peptidi e farmaci",
+        "pills": "Pillole", "general": "Generale", "blog": "Blog", "contact": "Contatto",
+        "cgv": "Termini", "returns": "Resi", "privacy": "Privacy", "fair": "Domande eque",
+        "faq": "FAQ",
+        "reviews": "Recensioni", "reviews_title": "Cosa dicono i clienti",
+        "leave_review": "Lascia recensione", "post_review": "Pubblica",
+        "add_to_cart": "Aggiungi", "your_cart": "Carrello",
+        "checkout": "Procedi", "order_wa": "Ordina via WhatsApp",
+        "features_home": "Negozio affidabile.",
+        "features_price": "Prezzi accessibili.",
+        "features_ship": "Spedizione gratuita.",
+        "features_support": "Supporto 24/7.",
+        "newsletter": "10% di sconto",
+        "newsletter_sub": "Iscriviti alla newsletter.",
+        "subscribe": "Iscriviti", "email_ph": "Tua email",
+        "about_us": "Chi siamo", "about_title": "Promuovere la salute",
+        "about_text": "Crediamo nella fiducia.",
+        "discover": "Scopri i prodotti",
         "contact_us": "Contattaci", "all_rights": "Tutti i diritti riservati",
         "full_name": "Nome completo", "email": "Email", "phone": "Telefono",
-        "address": "Indirizzo di consegna", "password": "Password", "confirm_password": "Conferma password",
+        "address": "Indirizzo", "password": "Password", "confirm_password": "Conferma",
         "send": "Invia", "message": "Messaggio", "total": "Totale", "quantity": "Quantità",
-        "welcome_back": "Bentornato!", "invalid_credentials": "Email o password non validi.",
-        "email_exists": "Questa email è già in uso.",
-        "account_created": "Account creato con successo!",
-        "passwords_dont_match": "Le password non corrispondono.",
+        "welcome_back": "Bentornato!", "invalid_credentials": "Non valido.",
+        "email_exists": "Email già in uso.",
+        "account_created": "Account creato!",
+        "passwords_dont_match": "Password diverse.",
         "you_are_logged": "Sei connesso.",
-        "order_info_title": "I tuoi dati di consegna",
-        "order_info_sub": "Compila questi dati e clicca sul pulsante verde per ordinare via WhatsApp.",
-        "pay_whatsapp": "Conferma e invia via WhatsApp",
-        "order_summary": "Riepilogo ordine",
-        "thank_you": "Grazie per il tuo ordine!",
-        "order_saved": "Il tuo ordine è stato registrato con successo.",
-        "last_step": "Ultimo passaggio: inviaci il tuo ordine via WhatsApp",
-        "we_respond": "Ti risponderemo immediatamente con i dettagli di pagamento.",
-        "send_whatsapp": "Invia il mio ordine via WhatsApp",
-        "my_orders": "I miei ordini", "no_orders": "Nessun ordine al momento.",
+        "order_info_title": "I tuoi dati",
+        "order_info_sub": "Compila e clicca il pulsante verde.",
+        "pay_whatsapp": "Conferma via WhatsApp",
+        "order_summary": "Riepilogo",
+        "thank_you": "Grazie!",
+        "order_saved": "Ordine registrato.",
+        "last_step": "Ultimo passo: invia via WhatsApp",
+        "we_respond": "Risponderemo con i dettagli.",
+        "send_whatsapp": "Invia via WhatsApp",
+        "my_orders": "I miei ordini", "no_orders": "Nessun ordine.",
         "page_not_found": "Pagina non trovata", "error_404": "Errore 404",
         "back_home": "Torna alla home",
         "select_options": "Seleziona opzioni",
-        "product_variants": "Questo prodotto ha diverse varianti.",
-        "guest_note": "Non hai bisogno di un account per ordinare.",
-        "contact_desc": "Una domanda? Il nostro team risponde 24/7.",
-        "message_sent": "Messaggio inviato! Ti risponderemo presto.",
+        "product_variants": "Più varianti.",
+        "guest_note": "Nessun account richiesto.",
+        "contact_desc": "Domanda? Il team risponde 24/7.",
+        "message_sent": "Messaggio inviato!",
         "read_more": "Leggi di più",
-        "blog_intro": "Consulta i nostri articoli informativi per saperne di più.",
-        "faq_intro": "Risposte alle tue domande più importanti",
-        "faq_sub": "Trova rapidamente le risposte alle domande frequenti sui nostri prodotti.",
+        "blog_intro": "Leggi i nostri articoli.",
+        "faq_intro": "Risposte alle tue domande",
+        "faq_sub": "Trova rapidamente le risposte.",
+        "gallery": "Galleria foto",
+        "photos_upload": "Aggiungi fino a 5 foto",
+        "photos_max": "Max 5 foto per prodotto",
+        "photos_current": "Foto attuali",
+        "upload": "Carica",
+        "delete": "Elimina",
     },
     "es": {
-        "welcome": "Bienvenido a la tienda Monjaroo",
-        "hero_title": "Productos de bienestar premium para la salud diaria",
-        "hero_text": "Descubre suplementos y productos de bienestar de alta calidad, rigurosamente testeados y aprobados, para apoyar tu cuerpo, estimular tu energía y favorecer una vitalidad duradera.",
-        "buy_now": "Comprar ahora",
-        "search": "Buscar", "search_ph": "Buscar un producto...",
+        "welcome": "Bienvenido a Monjaroo",
+        "hero_title": "Productos de bienestar premium",
+        "hero_text": "Descubre productos de bienestar de alta calidad.",
+        "buy_now": "Comprar ahora", "search": "Buscar", "search_ph": "Buscar producto...",
         "login": "Iniciar sesión", "register": "Registrarse", "logout": "Cerrar sesión",
-        "account": "Mi cuenta", "cart": "Carrito", "empty_cart": "Tu carrito está vacío.",
+        "account": "Mi cuenta", "cart": "Carrito", "empty_cart": "Carrito vacío.",
         "home": "Inicio", "meds": "Medicamentos", "peptides": "Péptidos",
-        "pills": "Píldoras para la erección", "general": "General",
-        "blog": "Blog", "contact": "Contacto",
-        "cgv": "Términos y condiciones", "returns": "Devoluciones y reembolsos",
-        "privacy": "Política de privacidad", "fair": "Preguntas justas",
-        "faq": "Preguntas frecuentes",
-        "reviews": "Opiniones de clientes", "reviews_title": "Lo que dicen nuestros clientes",
-        "leave_review": "Deja tu opinión", "post_review": "Publicar mi opinión",
+        "pills": "Píldoras", "general": "General", "blog": "Blog", "contact": "Contacto",
+        "cgv": "Términos", "returns": "Devoluciones", "privacy": "Privacidad", "fair": "Preguntas",
+        "faq": "FAQ",
+        "reviews": "Opiniones", "reviews_title": "Lo que dicen los clientes",
+        "leave_review": "Deja tu opinión", "post_review": "Publicar",
         "add_to_cart": "Añadir al carrito", "your_cart": "Tu carrito",
-        "checkout": "Finalizar compra", "order_wa": "Pedir por WhatsApp",
-        "features_home": "Tienda de confianza con productos de calidad.",
-        "features_price": "Precios asequibles y atractivos para todos los clientes.",
-        "features_ship": "Envío express gratis con seguimiento.",
-        "features_support": "Soporte online 24/7.",
-        "newsletter": "Obtén un 10% de descuento en tu próximo pedido",
-        "newsletter_sub": "Suscríbete a nuestro boletín para ofertas exclusivas.",
-        "subscribe": "Suscribirse", "email_ph": "Tu dirección de correo",
-        "about_us": "Sobre nosotros", "about_title": "Promover la salud a través de la calidad y el cuidado",
-        "about_text": "En Monjaroo.shop, creemos que la verdadera salud comienza con la confianza. Nuestra misión es ofrecer productos seguros, eficaces y testeados para una vida diaria más sana y equilibrada.",
-        "discover": "Descubre nuestros péptidos y medicamentos",
+        "checkout": "Finalizar", "order_wa": "Pedir por WhatsApp",
+        "features_home": "Tienda de confianza.",
+        "features_price": "Precios asequibles.",
+        "features_ship": "Envío gratis.",
+        "features_support": "Soporte 24/7.",
+        "newsletter": "10% descuento",
+        "newsletter_sub": "Suscríbete al boletín.",
+        "subscribe": "Suscribirse", "email_ph": "Tu correo",
+        "about_us": "Sobre nosotros", "about_title": "Promover la salud",
+        "about_text": "Creemos en la confianza.",
+        "discover": "Descubre nuestros productos",
         "contact_us": "Contáctanos", "all_rights": "Todos los derechos reservados",
         "full_name": "Nombre completo", "email": "Correo", "phone": "Teléfono",
-        "address": "Dirección de envío", "password": "Contraseña", "confirm_password": "Confirmar contraseña",
+        "address": "Dirección", "password": "Contraseña", "confirm_password": "Confirmar",
         "send": "Enviar", "message": "Mensaje", "total": "Total", "quantity": "Cantidad",
-        "welcome_back": "¡Bienvenido de nuevo!", "invalid_credentials": "Correo o contraseña incorrectos.",
-        "email_exists": "Este correo ya está en uso.",
-        "account_created": "¡Cuenta creada con éxito!",
+        "welcome_back": "¡Bienvenido!", "invalid_credentials": "No válido.",
+        "email_exists": "Correo en uso.",
+        "account_created": "¡Cuenta creada!",
         "passwords_dont_match": "Las contraseñas no coinciden.",
         "you_are_logged": "Estás conectado.",
-        "order_info_title": "Tu información de envío",
-        "order_info_sub": "Rellena esta información y haz clic en el botón verde para pedir por WhatsApp.",
-        "pay_whatsapp": "Confirmar y enviar por WhatsApp",
+        "order_info_title": "Tu información",
+        "order_info_sub": "Rellena y haz clic en el botón verde.",
+        "pay_whatsapp": "Confirmar por WhatsApp",
         "order_summary": "Resumen del pedido",
-        "thank_you": "¡Gracias por tu pedido!",
-        "order_saved": "Tu pedido ha sido registrado con éxito.",
-        "last_step": "Último paso: envíanos tu pedido por WhatsApp",
-        "we_respond": "Te responderemos inmediatamente con los detalles de pago.",
-        "send_whatsapp": "Enviar mi pedido por WhatsApp",
-        "my_orders": "Mis pedidos", "no_orders": "Aún no hay pedidos.",
+        "thank_you": "¡Gracias!",
+        "order_saved": "Pedido registrado.",
+        "last_step": "Último paso: envía por WhatsApp",
+        "we_respond": "Te responderemos con los detalles.",
+        "send_whatsapp": "Enviar por WhatsApp",
+        "my_orders": "Mis pedidos", "no_orders": "Sin pedidos.",
         "page_not_found": "Página no encontrada", "error_404": "Error 404",
         "back_home": "Volver al inicio",
         "select_options": "Seleccionar opciones",
-        "product_variants": "Este producto tiene varias variantes.",
-        "guest_note": "No necesitas una cuenta para pedir.",
-        "contact_desc": "¿Una pregunta? Nuestro equipo responde 24/7.",
-        "message_sent": "¡Mensaje enviado! Te responderemos pronto.",
+        "product_variants": "Varias variantes.",
+        "guest_note": "No necesitas cuenta para pedir.",
+        "contact_desc": "¿Pregunta? Nuestro equipo responde 24/7.",
+        "message_sent": "¡Mensaje enviado!",
         "read_more": "Leer más",
-        "blog_intro": "Consulta nuestros artículos informativos para saber más.",
-        "faq_intro": "Respuestas a tus preguntas más importantes",
-        "faq_sub": "Encuentra rápidamente respuestas a las preguntas frecuentes sobre nuestros productos.",
+        "blog_intro": "Lee nuestros artículos.",
+        "faq_intro": "Respuestas a tus preguntas",
+        "faq_sub": "Encuentra rápidamente respuestas.",
+        "gallery": "Galería de fotos",
+        "photos_upload": "Añadir hasta 5 fotos",
+        "photos_max": "Máximo 5 fotos por producto",
+        "photos_current": "Fotos actuales",
+        "upload": "Subir",
+        "delete": "Eliminar",
     },
 }
 
@@ -586,6 +608,9 @@ class Produit(db.Model):
     categorie_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
     actif = db.Column(db.Boolean, default=True)
     date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    photos = db.relationship("PhotoProduit", backref="produit", lazy=True,
+                             cascade="all, delete-orphan",
+                             order_by="PhotoProduit.ordre")
 
     @property
     def affichage_prix(self):
@@ -594,6 +619,26 @@ class Produit(db.Model):
         if self.prix_max and self.prix_max > self.prix:
             return f"{fmt(self.prix)} - {fmt(self.prix_max)}"
         return fmt(self.prix)
+
+    @property
+    def toutes_photos(self):
+        """Retourne toutes les photos (galerie + image principale)."""
+        liste = []
+        if self.image:
+            liste.append(self.image)
+        for p in self.photos:
+            if p.chemin and p.chemin not in liste:
+                liste.append(p.chemin)
+        return liste
+
+
+class PhotoProduit(db.Model):
+    __tablename__ = "photos_produit"
+    id = db.Column(db.Integer, primary_key=True)
+    produit_id = db.Column(db.Integer, db.ForeignKey("produits.id"), nullable=False)
+    chemin = db.Column(db.String(500), nullable=False)
+    ordre = db.Column(db.Integer, default=0)
+    date = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Commande(db.Model):
@@ -832,8 +877,9 @@ app.jinja_env.globals["wa_url"] = wa_url
 app.jinja_env.globals["ICONS"] = ICONS
 app.jinja_env.globals["_"] = _
 app.jinja_env.globals["admin_only"] = _admin_only
+app.jinja_env.globals["MAX_PHOTOS"] = MAX_PHOTOS_PAR_PRODUIT
 # =============================================================
-# CSS RESPONSIVE COMPLET
+# CSS RESPONSIVE + STYLES GALERIE/CARROUSEL
 # =============================================================
 CSS = """
 :root{
@@ -851,6 +897,7 @@ img{max-width:100%;display:block;height:auto}
 svg.ico{width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0}
 button{font-family:inherit}
 
+/* TOPBAR */
 .topbar{background:#f5f5f5;color:#333;font-size:13px;padding:8px 24px;
   display:flex;justify-content:space-between;align-items:center;
   border-bottom:1px solid var(--border);position:relative;z-index:1000}
@@ -874,6 +921,7 @@ button{font-family:inherit}
 .country-block .wa-mini{display:inline-flex;align-items:center;color:#25d366;margin-left:4px}
 .country-block .wa-mini svg{width:18px;height:18px}
 
+/* HEADER */
 .header{background:#fff;padding:16px 24px;display:flex;align-items:center;
   gap:24px;border-bottom:1px solid var(--border);position:relative;z-index:100}
 .header .logo{font-size:24px;font-weight:800;color:var(--vert);white-space:nowrap}
@@ -895,6 +943,7 @@ button{font-family:inherit}
   border-radius:30px;font-weight:600}
 .burger{display:none;cursor:pointer;color:var(--vert);padding:8px;background:none;border:0}
 
+/* NAV */
 .nav{padding:0 24px;display:flex;gap:26px;font-size:14px;font-weight:500;
   border-bottom:1px solid var(--border);background:#fff;flex-wrap:wrap;
   position:relative;z-index:99;align-items:center}
@@ -912,6 +961,7 @@ button{font-family:inherit}
 .dropdown-menu a{display:block;padding:11px 20px;color:#111;font-size:14px;white-space:nowrap}
 .dropdown-menu a:hover{background:#f7f7f9;color:var(--violet);opacity:1}
 
+/* HERO */
 .hero{position:relative;color:#fff;padding:72px 24px;overflow:hidden;
   min-height:480px;display:flex;align-items:center}
 .hero-bg{position:absolute;inset:0;z-index:0}
@@ -936,6 +986,7 @@ button{font-family:inherit}
   cursor:pointer;transition:all .3s}
 .hero-dots span.active{background:#fff;width:26px;border-radius:5px}
 
+/* FEATURES */
 .features{background:var(--bg-alt);padding:28px 24px;display:grid;
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:1200px;margin:0 auto}
 .feature{background:#fff;border-radius:var(--radius);padding:20px;display:flex;
@@ -944,6 +995,7 @@ button{font-family:inherit}
 .feature .ico svg{width:26px;height:26px}
 .feature p{margin:0;font-size:14px;color:#333}
 
+/* SECTIONS */
 .section{max-width:1200px;margin:0 auto;padding:56px 24px}
 .section-sm{max-width:1200px;margin:0 auto;padding:32px 24px}
 .about{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
@@ -960,6 +1012,7 @@ button{font-family:inherit}
   border-bottom:2px solid rgba(255,255,255,.4);display:inline-block;padding-bottom:4px}
 .violet-section p{font-size:15px;color:#f0e6f7;margin:0 0 10px;max-width:640px}
 
+/* AVIS */
 .avis-label{color:var(--violet);font-weight:600;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
 .avis-title{font-size:28px;font-weight:800;margin:0 0 20px;color:#111}
 .avis-stats{display:flex;gap:28px;align-items:center;margin-bottom:28px;
@@ -988,6 +1041,210 @@ button{font-family:inherit}
 .avis-form .stars-input label:hover svg,.avis-form .stars-input label:hover ~ label svg,
 .avis-form .stars-input input:checked ~ label svg{fill:#f5b301}
 
+/* ============================================================
+   GALERIE PHOTO PRODUIT (page publique)
+   ============================================================ */
+.product-page{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
+
+/* Carrousel principal */
+.gallery-wrap{position:sticky;top:20px}
+.gallery-main{
+  position:relative;
+  aspect-ratio:1/1;
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.06);
+}
+.gallery-main .slide{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  transition:opacity .6s ease-in-out;
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+}
+.gallery-main .slide.active{opacity:1}
+
+/* Compteur en haut à droite */
+.gallery-main .counter{
+  position:absolute;
+  top:12px;
+  right:12px;
+  background:rgba(0,0,0,.55);
+  color:#fff;
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:20px;
+  font-weight:600;
+  z-index:5;
+  backdrop-filter:blur(4px);
+}
+
+/* Flèches de navigation */
+.gallery-main .nav-btn{
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  background:rgba(255,255,255,.9);
+  border:0;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);
+  z-index:5;
+  color:#111;
+  transition:background var(--transition);
+}
+.gallery-main .nav-btn:hover{background:#fff}
+.gallery-main .nav-btn.prev{left:12px}
+.gallery-main .nav-btn.next{right:12px}
+.gallery-main .nav-btn svg{width:18px;height:18px}
+
+/* Points indicateurs */
+.gallery-main .dots{
+  position:absolute;
+  bottom:12px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:6px;
+  z-index:5;
+}
+.gallery-main .dots span{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:rgba(255,255,255,.6);
+  cursor:pointer;
+  transition:all .3s;
+}
+.gallery-main .dots span.active{
+  background:#fff;
+  width:24px;
+  border-radius:4px;
+}
+
+/* Miniatures */
+.gallery-thumbs{
+  display:flex;
+  gap:10px;
+  margin-top:14px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+.gallery-thumb{
+  width:70px;
+  height:70px;
+  border-radius:8px;
+  border:2px solid transparent;
+  background-size:cover;
+  background-position:center;
+  cursor:pointer;
+  transition:all var(--transition);
+  background-color:#f7f7f9;
+}
+.gallery-thumb:hover{border-color:var(--violet)}
+.gallery-thumb.active{border-color:var(--violet);box-shadow:0 0 0 2px rgba(168,85,247,.2)}
+
+/* ============================================================
+   ADMIN — FORMULAIRE UPLOAD PHOTOS
+   ============================================================ */
+.photo-upload-section{
+  background:#f7f7f9;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+  padding:20px;
+  margin:20px 0;
+}
+.photo-upload-section h3{
+  margin:0 0 8px;
+  color:var(--vert);
+  font-size:16px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.photo-upload-section .hint{
+  color:#777;
+  font-size:13px;
+  margin:0 0 14px;
+}
+.photo-upload-section input[type=file]{
+  width:100%;
+  padding:12px;
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  margin-bottom:12px;
+  font-size:13px;
+}
+.photo-upload-section button{
+  background:var(--violet);
+  color:#fff;
+  border:0;
+  padding:10px 22px;
+  border-radius:var(--radius-sm);
+  font-weight:600;
+  cursor:pointer;
+  font-family:inherit;
+}
+.photo-upload-section button:hover{background:var(--violet-fonce)}
+
+.photo-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.photo-item{
+  position:relative;
+  aspect-ratio:1/1;
+  border-radius:8px;
+  overflow:hidden;
+  background:#fff;
+  border:1px solid var(--border);
+}
+.photo-item img{width:100%;height:100%;object-fit:cover}
+.photo-item .del-btn{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background:rgba(239,68,68,.95);
+  color:#fff;
+  border:0;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+  line-height:1;
+  font-weight:700;
+  padding:0;
+}
+.photo-item .del-btn:hover{background:#dc2626}
+
+.photo-counter{
+  display:inline-block;
+  background:var(--violet);
+  color:#fff;
+  font-size:12px;
+  padding:3px 10px;
+  border-radius:12px;
+  font-weight:600;
+  margin-left:8px;
+}
+
+/* FLOAT BTNS */
 .float-btns{position:fixed;bottom:20px;right:20px;z-index:99999;
   display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none}
 .float-btns > *{pointer-events:auto}
@@ -1007,6 +1264,7 @@ button{font-family:inherit}
 .cart-float .badge{position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;
   font-size:11px;padding:2px 6px;border-radius:10px;font-weight:700;pointer-events:none}
 
+/* CART DRAWER */
 .cart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;
   pointer-events:none;transition:opacity .25s;z-index:100000}
 .cart-overlay.open{opacity:1;pointer-events:auto}
@@ -1038,6 +1296,7 @@ button{font-family:inherit}
   padding:12px;border-radius:8px;font-weight:700;margin-bottom:8px;cursor:pointer}
 .cart-empty{text-align:center;color:var(--muted);padding:40px 0}
 
+/* GRILLE PRODUITS */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px}
 .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);
   overflow:hidden;display:flex;flex-direction:column;transition:box-shadow var(--transition)}
@@ -1060,6 +1319,7 @@ button{font-family:inherit}
 .card-form .btn-options{background:#fff;color:var(--violet);border:2px solid var(--violet)}
 .card-note{font-size:12px;color:#8a8a8a;font-style:italic;margin-top:4px}
 
+/* BLOG */
 .blog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px}
 .blog-card{border:1px solid var(--border);border-radius:var(--radius);
   overflow:hidden;background:#fff;display:flex;flex-direction:column}
@@ -1071,6 +1331,7 @@ button{font-family:inherit}
 .blog-card p{color:#555;font-size:14px;margin:0 0 12px;flex:1}
 .blog-card a.read{color:var(--violet);font-weight:600;font-size:14px;margin-top:auto}
 
+/* FAQ */
 details{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
 details summary{cursor:pointer;padding:16px 20px;font-weight:600;color:#111;
   list-style:none;display:flex;justify-content:space-between;align-items:center;font-size:15px}
@@ -1078,12 +1339,14 @@ details summary::after{content:"+";font-size:20px;color:var(--violet);transition
 details[open] summary::after{transform:rotate(45deg)}
 details p{margin:0;padding:0 20px 16px;color:#555;font-size:14px;line-height:1.7}
 
+/* LEGAL */
 .legal h1{margin-bottom:8px}
 .legal h2{color:var(--vert);font-size:19px;margin:28px 0 10px}
 .legal h3{color:#111;font-size:16px;margin:20px 0 8px}
 .legal p,.legal li{color:#444;font-size:14px;line-height:1.75}
 .legal ul{padding-left:22px}
 
+/* NEWSLETTER */
 .newsletter{background:var(--vert);color:#fff;padding:48px 24px;text-align:center}
 .newsletter h2{color:#fff;font-size:24px;margin:0 0 8px}
 .newsletter p{color:#c9dede;margin-bottom:22px;font-size:14px}
@@ -1093,6 +1356,7 @@ details p{margin:0;padding:0 20px 16px;color:#555;font-size:14px;line-height:1.7
 .newsletter button{background:var(--violet);color:#fff;border:0;padding:12px 26px;
   border-radius:30px;font-weight:700;cursor:pointer}
 
+/* FOOTER */
 footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .footer-grid{max-width:1200px;margin:0 auto;display:grid;
   grid-template-columns:2fr 1fr 1fr 1.5fr;gap:32px;margin-bottom:32px}
@@ -1103,11 +1367,13 @@ footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .footer-grid a svg{width:14px;height:14px}
 .footer-copy{border-top:1px solid #1a4444;padding-top:16px;text-align:center;font-size:12px}
 
+/* FLASH */
 .flash{max-width:1200px;margin:14px auto 0;padding:0 24px}
 .flash-success{background:#e6f4ea;color:#1e6b3a;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px}
 .flash-error{background:#fdecea;color:#a32115;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px}
 .flash-info{background:#e8f0ff;color:#1e3a8a;padding:12px;border-radius:var(--radius-sm);margin-bottom:8px}
 
+/* FORMULAIRES */
 .form label{display:block;margin-bottom:14px;font-size:14px;font-weight:500}
 .form input,.form textarea,.form select{width:100%;padding:10px 12px;
   border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:4px;
@@ -1115,6 +1381,7 @@ footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .form button{background:var(--violet);color:#fff;border:0;padding:11px 22px;
   border-radius:var(--radius-sm);font-weight:600;cursor:pointer;font-family:inherit}
 
+/* PWD EYE */
 .pwd-wrap{position:relative;display:block;margin-top:4px}
 .pwd-wrap input{padding-right:56px;width:100%;margin-top:0}
 .pwd-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);
@@ -1124,6 +1391,7 @@ footer{background:#0a2e2e;color:#b8c9c9;padding:48px 24px 22px;font-size:13px}
 .pwd-toggle:hover{background:var(--violet-fonce)}
 .pwd-toggle svg{width:18px;height:18px;pointer-events:none;stroke:#fff;fill:none}
 
+/* TABLEAUX */
 table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
 th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
 th{background:var(--bg-alt);color:#111;font-weight:600}
@@ -1132,6 +1400,7 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .btn-link{display:inline-block;background:var(--violet);color:#fff;padding:10px 18px;
   border-radius:var(--radius-sm);margin:8px 0;font-weight:600;cursor:pointer}
 
+/* BADGES */
 .badge-status{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
 .badge-en_attente{background:#fef3c7;color:#92400e}
 .badge-en_cours{background:#dbeafe;color:#1e40af}
@@ -1139,10 +1408,12 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .badge-livree{background:#d1fae5;color:#065f46}
 .badge-annulee{background:#fee2e2;color:#991b1b}
 
+/* ERROR */
 .error-page{text-align:center;padding:100px 24px}
 .error-page h1{font-size:80px;color:var(--violet);margin:0}
 .error-page p{color:var(--muted);font-size:18px;margin:8px 0 22px}
 
+/* ADMIN */
 .admin-wrap{display:flex;min-height:100vh;background:#f0f2f5}
 .admin-side{width:230px;background:var(--vert);color:#fff;padding:22px 0;flex-shrink:0}
 .admin-side h2{font-size:15px;padding:0 20px;margin:0 0 18px;color:#fff;letter-spacing:1px}
@@ -1166,6 +1437,7 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .stat-card.red .value{color:#dc2626}
 .stat-card.green .value{color:#059669}
 
+/* CHECKOUT */
 .checkout-btn{display:flex;align-items:center;justify-content:center;gap:10px;
   background:#25d366;color:#fff;padding:16px 24px;border-radius:10px;font-weight:700;
   font-size:16px;cursor:pointer;border:0;font-family:inherit;width:100%;
@@ -1173,6 +1445,9 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .checkout-btn:hover{background:#1eb955}
 .checkout-btn svg{width:24px;height:24px;fill:#fff;pointer-events:none}
 
+/* ============================================================
+   RESPONSIVE TABLETTE
+   ============================================================ */
 @media(max-width:1024px){
   .hero h1{font-size:36px}
   .hero{min-height:420px;padding:60px 20px}
@@ -1182,8 +1457,12 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .violet-section h2{font-size:26px}
   .grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:18px}
   .footer-grid{grid-template-columns:1.5fr 1fr 1fr 1.2fr;gap:24px}
+  .product-page{gap:24px}
 }
 
+/* ============================================================
+   RESPONSIVE MOBILE
+   ============================================================ */
 @media(max-width:768px){
   .topbar{padding:6px 12px;font-size:12px;flex-wrap:wrap;gap:6px}
   .topbar .left,.topbar .right{gap:6px}
@@ -1242,6 +1521,10 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .avis-card{padding:18px}
   .avis-form{padding:20px}
 
+  .product-page{grid-template-columns:1fr !important;gap:20px !important}
+  .gallery-wrap{position:static}
+  .gallery-thumb{width:56px;height:56px}
+
   .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
   .card-body{padding:12px;gap:6px}
   .card-title{font-size:13px}
@@ -1291,8 +1574,13 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 
   table{font-size:13px}
   th,td{padding:8px;font-size:12px}
+
+  .photo-grid{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
 }
 
+/* ============================================================
+   TRÈS PETIT MOBILE
+   ============================================================ */
 @media(max-width:480px){
   .features{grid-template-columns:1fr}
   .grid{grid-template-columns:1fr 1fr;gap:10px}
@@ -1311,6 +1599,7 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .float-btns{gap:6px}
   .wa-cta{display:none}
   .wa-btn,.cart-float{width:46px;height:46px}
+  .gallery-thumbs{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}
 }
 
 @supports(-webkit-touch-callout:none){
@@ -1659,11 +1948,6 @@ TEMPLATES["admin_login"] = """
     </div>
     <button type="submit" style="margin-top:14px">Se connecter</button>
   </form>
-  <div style="margin-top:24px;padding:14px;background:#f7f7f9;border-radius:8px;font-size:13px;color:#555;max-width:420px">
-    <strong>Identifiants :</strong><br>
-    Utilisateur : <code>admin</code> — Email : <code>admin@monjaroo.shop</code><br>
-    Mot de passe : celui que vous avez configuré
-  </div>
 </section>
 {% endblock %}
 """
@@ -1885,7 +2169,7 @@ TEMPLATES["admin_produits"] = """
 <h1>Produits & stock</h1>
 <a class="btn-link" href="{{ url_for('admin_produit_form') }}">+ Nouveau produit</a>
 <table>
-<tr><th>Image</th><th>Nom</th><th>Catégorie</th><th>Prix</th><th>Stock</th><th>Actif</th><th></th></tr>
+<tr><th>Image</th><th>Nom</th><th>Catégorie</th><th>Prix</th><th>Stock</th><th>Photos</th><th>Actif</th><th></th></tr>
 {% for p in produits %}
 <tr>
   <td>{% if p.image %}<img src="{{ p.image }}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">{% endif %}</td>
@@ -1893,6 +2177,7 @@ TEMPLATES["admin_produits"] = """
   <td>{{ p.categorie.nom if p.categorie else '—' }}</td>
   <td>{{ p.affichage_prix }}</td>
   <td>{{ p.stock }}</td>
+  <td><span style="background:#f3e8ff;color:#a855f7;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600">{{ p.photos|length }}/5</span></td>
   <td>{{ "oui" if p.actif else "non" }}</td>
   <td>
     <a href="{{ url_for('admin_produit_form', pid=p.id) }}">Éditer</a>
@@ -1908,7 +2193,7 @@ TEMPLATES["admin_produit_form"] = """
 {% extends "admin_base" %}
 {% block content %}
 <h1>{{ "Éditer" if produit.id else "Nouveau" }} produit</h1>
-<form method="post" enctype="multipart/form-data" class="form" style="max-width:600px">
+<form method="post" enctype="multipart/form-data" class="form" style="max-width:700px">
   <label>Nom <input name="nom" value="{{ produit.nom or '' }}" required></label>
   <label>Sous-titre <input name="sous_titre" value="{{ produit.sous_titre or '' }}"></label>
   <label>Description <textarea name="description" rows="4">{{ produit.description or '' }}</textarea></label>
@@ -1916,7 +2201,7 @@ TEMPLATES["admin_produit_form"] = """
   <label>Prix max (€) — 0 si unique <input type="number" step="0.01" name="prix_max" value="{{ produit.prix_max or 0 }}"></label>
   <label>Stock <input type="number" name="stock" value="{{ produit.stock or 0 }}"></label>
   {% if produit.image %}<img src="{{ produit.image }}" style="max-width:200px;border-radius:8px;margin:10px 0">{% endif %}
-  <label>Image <input type="file" name="image_file" accept="image/*"></label>
+  <label>Image principale (upload) <input type="file" name="image_file" accept="image/*"></label>
   <label>OU URL <input name="image" value="{{ produit.image or '' }}"></label>
   <label>Catégorie
     <select name="categorie_id">
@@ -2036,11 +2321,63 @@ TEMPLATES["admin_faq"] = """
 {% endblock %}
 """
 
+TEMPLATES["admin_produit_photos"] = """
+{% extends "admin_base" %}
+{% block content %}
+<h1>Photos du produit : {{ produit.nom }}</h1>
+<p style="color:#666;margin-bottom:20px">
+  <a href="{{ url_for('admin_produit_form', pid=produit.id) }}">← Retour à l'édition du produit</a>
+</p>
+
+<div class="photo-upload-section">
+  <h3>
+    {{ 'camera'|icon()|safe }} {{ _('photos_upload') }}
+    <span class="photo-counter">{{ produit.photos|length }} / {{ MAX_PHOTOS }}</span>
+  </h3>
+  <p class="hint">{{ _('photos_max') }}</p>
+
+  {% if produit.photos|length >= MAX_PHOTOS %}
+    <div style="padding:12px;background:#fef3c7;color:#92400e;border-radius:6px;font-size:13px">
+      ⚠️ Maximum atteint ({{ MAX_PHOTOS }} photos). Supprimez une photo avant d'en ajouter une nouvelle.
+    </div>
+  {% else %}
+    <form method="post" enctype="multipart/form-data"
+          action="{{ url_for('admin_produit_photo_upload', pid=produit.id) }}">
+      <input type="file" name="photos" accept="image/*" multiple required>
+      <button type="submit">{{ 'check'|icon()|safe }} {{ _('upload') }}</button>
+    </form>
+  {% endif %}
+</div>
+
+{% if produit.photos %}
+  <h3 style="color:var(--vert);margin-top:28px">{{ _('photos_current') }}</h3>
+  <div class="photo-grid">
+    {% for photo in produit.photos %}
+    <div class="photo-item">
+      <img src="{{ photo.chemin }}" alt="Photo {{ loop.index }}">
+      <form method="post"
+            action="{{ url_for('admin_produit_photo_supprimer', pid=produit.id, photo_id=photo.id) }}"
+            style="position:absolute;top:6px;right:6px;margin:0">
+        <button type="submit" class="del-btn"
+                onclick="return confirm('Supprimer cette photo ?')"
+                title="{{ _('delete') }}">×</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p style="color:#999;margin-top:20px">Aucune photo pour ce produit. Ajoutez-en jusqu'à {{ MAX_PHOTOS }}.</p>
+{% endif %}
+
+{% endblock %}
+"""
+
 TEMPLATES["partial_card"] = """
 <div class="card">
   <a href="{{ url_for('produit_detail', slug=p.slug) }}">
     <div class="card-img">
       {% if p.image %}<img src="{{ p.image }}" alt="{{ p.nom }}">
+      {% elif p.photos %}<img src="{{ p.photos[0].chemin }}" alt="{{ p.nom }}">
       {% else %}<span style="color:#ccc">image</span>{% endif %}
     </div>
   </a>
@@ -2210,20 +2547,67 @@ TEMPLATES["produit"] = """
 {% extends "base" %}
 {% block content %}
 <section class="section">
-  <div class="product-layout" style="display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start">
+  <div class="product-page">
     <div>
-      {% if produit.image %}<img src="{{ produit.image }}" alt="{{ produit.nom }}" style="width:100%;border-radius:12px">
-      {% else %}<div style="aspect-ratio:1;background:#f5f5f5;border-radius:12px"></div>{% endif %}
+      <div class="gallery-wrap">
+        {% set photos = produit.toutes_photos %}
+        {% if photos %}
+          <div class="gallery-main" id="galleryMain">
+            <span class="counter" id="galleryCounter">1 / {{ photos|length }}</span>
+
+            {% for photo in photos %}
+              <div class="slide {% if loop.first %}active{% endif %}"
+                   style="background-image:url('{{ photo }}')"
+                   data-index="{{ loop.index0 }}"></div>
+            {% endfor %}
+
+            {% if photos|length > 1 %}
+              <button type="button" class="nav-btn prev" onclick="galleryPrev();return false;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <button type="button" class="nav-btn next" onclick="galleryNext();return false;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+
+              <div class="dots" id="galleryDots">
+                {% for photo in photos %}
+                  <span class="{% if loop.first %}active{% endif %}"
+                        onclick="galleryShow({{ loop.index0 }});return false;"></span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          {% if photos|length > 1 %}
+            <div class="gallery-thumbs" id="galleryThumbs">
+              {% for photo in photos %}
+                <div class="gallery-thumb {% if loop.first %}active{% endif %}"
+                     style="background-image:url('{{ photo }}')"
+                     onclick="galleryShow({{ loop.index0 }});return false;"></div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="gallery-main">
+            <div class="slide active" style="background:#f5f5f5;display:flex;align-items:center;justify-content:center;color:#ccc">
+              Aucune photo disponible
+            </div>
+          </div>
+        {% endif %}
+      </div>
     </div>
+
     <div>
       {% if produit.sous_titre %}<span class="card-cat">{{ produit.sous_titre }}</span>{% endif %}
       <h1 style="color:#111">{{ produit.nom }}</h1>
       <div class="card-price" style="font-size:24px">{{ produit.affichage_prix }}</div>
       <div style="margin:18px 0;color:#555">{{ produit.description|safe }}</div>
+
       {% if produit.prix_max and produit.prix_max > produit.prix %}
         <div style="padding:18px;background:#f7f7f9;border-radius:10px;margin-bottom:18px">
           <strong style="color:var(--vert)">{{ _('select_options') }}</strong>
-          <form method="post" action="{{ url_for('panier_ajouter', produit_id=produit.id) }}" style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+          <form method="post" action="{{ url_for('panier_ajouter', produit_id=produit.id) }}"
+                style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
             <select name="quantite" style="padding:10px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:180px">
               <option value="1">1 — {{ produit.prix|eur }}</option>
               <option value="2">2 — {{ (produit.prix*2)|eur }}</option>
@@ -2233,15 +2617,65 @@ TEMPLATES["produit"] = """
           </form>
         </div>
       {% else %}
-        <form method="post" action="{{ url_for('panier_ajouter', produit_id=produit.id) }}" style="display:flex;gap:10px;max-width:340px;flex-wrap:wrap">
-          <input type="number" name="quantite" value="1" min="1" style="width:80px;padding:10px;border:1px solid var(--border);border-radius:8px">
-          <button type="submit" class="btn-link" style="flex:1;padding:12px;margin:0;border:0;cursor:pointer;min-width:160px">{{ _('add_to_cart') }}</button>
+        <form method="post" action="{{ url_for('panier_ajouter', produit_id=produit.id) }}"
+              style="display:flex;gap:10px;max-width:340px;flex-wrap:wrap">
+          <input type="number" name="quantite" value="1" min="1"
+                 style="width:80px;padding:10px;border:1px solid var(--border);border-radius:8px">
+          <button type="submit" class="btn-link"
+                  style="flex:1;padding:12px;margin:0;border:0;cursor:pointer;min-width:160px">{{ _('add_to_cart') }}</button>
         </form>
       {% endif %}
+
+      <a href="{{ wa_url('Bonjour, je souhaite commander : ' ~ produit.nom) }}"
+         target="_blank" rel="noopener"
+         style="display:inline-flex;align-items:center;gap:8px;margin-top:14px;
+                background:#25d366;color:#fff;padding:12px 20px;border-radius:8px;font-weight:600">
+        {{ 'whatsapp'|icon()|safe }} {{ _('order_wa') }}
+      </a>
     </div>
   </div>
 </section>
-<style>@media(max-width:768px){.product-layout{grid-template-columns:1fr !important;gap:20px !important}}</style>
+
+<script>
+(function(){
+  var slides = document.querySelectorAll('.gallery-main .slide');
+  var dots = document.querySelectorAll('#galleryDots span');
+  var thumbs = document.querySelectorAll('#galleryThumbs .gallery-thumb');
+  var counter = document.getElementById('galleryCounter');
+  if(slides.length < 2) return;
+  var current = 0;
+  var autoTimer = null;
+
+  function show(i){
+    if(i < 0) i = slides.length - 1;
+    if(i >= slides.length) i = 0;
+    slides.forEach(function(s,k){ s.classList.toggle('active', k===i); });
+    dots.forEach(function(d,k){ d.classList.toggle('active', k===i); });
+    thumbs.forEach(function(t,k){ t.classList.toggle('active', k===i); });
+    if(counter) counter.textContent = (i+1) + ' / ' + slides.length;
+    current = i;
+  }
+
+  window.galleryShow = function(i){ show(i); restartAuto(); };
+  window.galleryNext = function(){ show(current + 1); restartAuto(); };
+  window.galleryPrev = function(){ show(current - 1); restartAuto(); };
+
+  function restartAuto(){
+    if(autoTimer) clearInterval(autoTimer);
+    autoTimer = setInterval(function(){ show(current + 1); }, 4000);
+  }
+
+  /* Défilement automatique toutes les 4 secondes */
+  restartAuto();
+
+  /* Pause au survol */
+  var main = document.getElementById('galleryMain');
+  if(main){
+    main.addEventListener('mouseenter', function(){ if(autoTimer) clearInterval(autoTimer); });
+    main.addEventListener('mouseleave', restartAuto);
+  }
+})();
+</script>
 {% endblock %}
 """
 
@@ -2771,7 +3205,7 @@ def api_cart_remove():
 
 
 # =============================================================
-# COMMANDE : enregistre + WhatsApp (sans compte obligatoire)
+# COMMANDE : enregistre + WhatsApp
 # =============================================================
 @app.route("/commander", methods=["GET", "POST"])
 def commander():
@@ -3091,9 +3525,74 @@ def admin_produit_form(pid=None):
 def admin_produit_supprimer(pid):
     if not _admin_only(): return redirect(url_for("admin_login"))
     p = Produit.query.get_or_404(pid)
+    # supprimer les fichiers photos
+    for photo in p.photos:
+        try:
+            fp = os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(photo.chemin))
+            if os.path.exists(fp): os.remove(fp)
+        except Exception:
+            pass
     db.session.delete(p)
     db.session.commit()
     return redirect(url_for("admin_produits"))
+
+
+# =============================================================
+# ADMIN — GESTION GALERIE PHOTOS PRODUIT
+# =============================================================
+@app.route("/admin/produits/<int:pid>/photos", methods=["GET"])
+@login_required
+def admin_produit_photos(pid):
+    if not _admin_only(): return redirect(url_for("admin_login"))
+    produit = Produit.query.get_or_404(pid)
+    return render_template("admin_produit_photos", produit=produit)
+
+
+@app.route("/admin/produits/<int:pid>/photos/upload", methods=["POST"])
+@login_required
+def admin_produit_photo_upload(pid):
+    if not _admin_only(): return redirect(url_for("admin_login"))
+    produit = Produit.query.get_or_404(pid)
+    files = request.files.getlist("photos")
+    deja = produit.photos.count() if hasattr(produit.photos, "count") else len(produit.photos)
+    slots_libres = MAX_PHOTOS_PAR_PRODUIT - deja
+    if slots_libres <= 0:
+        flash(f"Maximum {MAX_PHOTOS_PAR_PRODUIT} photos déjà atteint.", "error")
+        return redirect(url_for("admin_produit_photos", pid=pid))
+    ordre = deja
+    ajoutees = 0
+    for f in files:
+        if ajoutees >= slots_libres: break
+        path = save_upload(f)
+        if path:
+            db.session.add(PhotoProduit(produit_id=produit.id, chemin=path, ordre=ordre))
+            ordre += 1
+            ajoutees += 1
+    if ajoutees > 0:
+        db.session.commit()
+        flash(f"{ajoutees} photo(s) ajoutée(s).", "success")
+    else:
+        flash("Aucune photo valide.", "error")
+    return redirect(url_for("admin_produit_photos", pid=pid))
+
+
+@app.route("/admin/produits/<int:pid>/photos/<int:photo_id>/supprimer", methods=["POST"])
+@login_required
+def admin_produit_photo_supprimer(pid, photo_id):
+    if not _admin_only(): return redirect(url_for("admin_login"))
+    photo = PhotoProduit.query.get_or_404(photo_id)
+    if photo.produit_id != pid:
+        return redirect(url_for("admin_produits"))
+    # supprimer le fichier
+    try:
+        fp = os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(photo.chemin))
+        if os.path.exists(fp): os.remove(fp)
+    except Exception:
+        pass
+    db.session.delete(photo)
+    db.session.commit()
+    flash("Photo supprimée.", "success")
+    return redirect(url_for("admin_produit_photos", pid=pid))
 
 
 @app.route("/admin/categories", methods=["GET", "POST"])
@@ -3228,7 +3727,6 @@ def seed():
     try:
         db.create_all()
 
-        # CATEGORIES
         cats = {"peptides": "Peptides", "medicaments": "Médicaments", "pilules": "Pilules pour l'érection"}
         for slug, nom in cats.items():
             if not Categorie.query.filter_by(slug=slug).first():
@@ -3239,7 +3737,6 @@ def seed():
         cat_pep = Categorie.query.filter_by(slug="peptides").first()
         cat_pil = Categorie.query.filter_by(slug="pilules").first()
 
-        # SLIDES
         if not Slide.query.first():
             for i, img in enumerate([
                 "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1600",
@@ -3250,12 +3747,11 @@ def seed():
             ]):
                 db.session.add(Slide(image=img, ordre=i))
 
-        # CONTENU ACCUEIL
         defauts = {
             "hero_image": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1600",
             "hero_badge": "Bienvenue dans la boutique Monjaroo",
             "hero_titre": "Produits de bien-être haut de gamme pour la santé quotidienne",
-            "hero_texte": "Découvrez des compléments alimentaires et produits de bien-être de qualité supérieure, rigoureusement testés et approuvés, pour soutenir votre corps, stimuler votre énergie et favoriser une vitalité durable.",
+            "hero_texte": "Découvrez des compléments alimentaires et produits de bien-être de qualité supérieure, rigoureusement testés et approuvés.",
             "hero_btn_texte": "Achetez maintenant", "hero_btn_lien": "/peptides",
             "feat1": "Magasin fiable proposant des produits de qualité.",
             "feat2": "Des prix abordables et attractifs pour tous les clients.",
@@ -3263,18 +3759,17 @@ def seed():
             "feat4": "Assistance en ligne 24h/24 et 7j/7.",
             "about_image": "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=900",
             "about_titre": "Promouvoir la santé par la qualité et les soins",
-            "about_texte": "Chez Monjaroo.shop, nous croyons que la véritable santé commence par la confiance. Notre mission est de proposer des produits sûrs, efficaces et testés pour une vie quotidienne plus saine et équilibrée.",
+            "about_texte": "Chez Monjaroo.shop, nous croyons que la véritable santé commence par la confiance.",
             "violet_titre": "Découvrez nos peptides et médicaments",
             "violet_p1a": "L'innovation commence par de bonnes bases.",
-            "violet_p1b": "Nos peptides sont conçus pour la recherche de pointe, en privilégiant la qualité, la pureté et la fiabilité.",
-            "violet_p2a": "Vous achetez des médicaments en ligne ? Le zolpidem favorise un sommeil réparateur, tandis que le diazépam contribue à apaiser le corps et l'esprit.",
-            "violet_p2b": "Commandez facilement et en toute fiabilité, en privilégiant la qualité et la praticité.",
+            "violet_p1b": "Nos peptides sont conçus pour la recherche de pointe.",
+            "violet_p2a": "Vous achetez des médicaments en ligne ?",
+            "violet_p2b": "Commandez facilement et en toute fiabilité.",
         }
         for k, v in defauts.items():
             if not Contenu.query.filter_by(cle=k).first():
                 db.session.add(Contenu(cle=k, valeur=v))
 
-        # PRODUITS MÉDICAMENTS
         if cat_med and not Produit.query.filter_by(categorie_id=cat_med.id).first():
             for nom, sous, pm, px in [
                 ("Diazépam 10 mg, pot de 100 compresses", "diazepam", 149.95, 0),
@@ -3297,7 +3792,6 @@ def seed():
                 db.session.add(Produit(nom=nom, slug=slugify(nom + "-" + sous), sous_titre=sous,
                                        prix=pm, prix_max=px, stock=30, categorie_id=cat_med.id, actif=True))
 
-        # PRODUITS PEPTIDES
         if cat_pep and not Produit.query.filter_by(categorie_id=cat_pep.id).first():
             for nom, sous, prix in [
                 ("Tirzapetide 40 mg", "tirzepatide", 209.95),
@@ -3311,7 +3805,6 @@ def seed():
                 db.session.add(Produit(nom=nom, slug=slugify(nom + "-" + sous), sous_titre=sous,
                                        prix=prix, stock=20, categorie_id=cat_pep.id, actif=True))
 
-        # PRODUITS PILULES
         if cat_pil and not Produit.query.filter_by(categorie_id=cat_pil.id).first():
             for nom, sous, prix in [
                 ("Lovegra 100 mg", "Lovegra", 9.95),
@@ -3324,94 +3817,37 @@ def seed():
                 db.session.add(Produit(nom=nom, slug=slugify(nom + "-" + sous), sous_titre=sous,
                                        prix=prix, stock=50, categorie_id=cat_pil.id, actif=True))
 
-        # PAGES LÉGALES
         pages = {
-            "conditions-generales": ("Conditions générales", """
-                <p><em>Nos règles et conditions — Bienvenue sur la page des Conditions Générales de Vente et de la Politique du Site de Monjaroo.shop.</em></p>
-                <h2>1. Processus de commande et livraisons</h2>
-                <p>Vous pouvez facilement passer commande via notre boutique en ligne. Après avoir effectué le paiement, vous recevrez un e-mail de confirmation sous 24 heures.</p>
-                <h2>2. Envoi</h2>
-                <p>Les commandes passées avant 14h00 sont traitées et expédiées le jour même (jours ouvrés). Les commandes passées après 14h00 sont expédiées le jour ouvré suivant.</p>
-                <h2>3. Prix et paiements</h2>
-                <p>Tous les prix affichés incluent la TVA et excluent les frais de livraison, sauf indication contraire.</p>
-                <h2>4. Garanties de qualité</h2>
-                <p>Nous garantissons que tous nos produits répondent aux normes les plus élevées. En cas de problème, contactez notre service client dans un délai de 14 jours.</p>
-                <h2>5. Annulations et retours</h2>
-                <p>Compte tenu de la nature de nos produits, nous n'acceptons pas les retours sauf en cas d'erreur de notre part.</p>
-                <h2>6. Responsabilité</h2>
-                <p>Monjaroo.shop n'est pas responsable des dommages indirects ou accessoires.</p>
-                <h2>7. Force majeure</h2>
-                <p>En cas de force majeure, Monjaroo.shop se réserve le droit de retarder ou d'annuler la livraison.</p>
-                <h2>8. Propriété intellectuelle</h2>
-                <p>L'ensemble du contenu de notre site web est la propriété de Monjaroo.shop.</p>
-                <h2>9. Droit applicable</h2>
-                <p>Les présentes conditions générales sont régies par le droit français.</p>
-                <h2>10. Contact</h2>
-                <p>Pour toute question : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a></p>
-            """),
-            "retours-remboursements": ("Retours et remboursements", """
-                <p><em>Tout ce que vous devez savoir sur les remboursements et les retours.</em></p>
-                <h2>1. Politique générale</h2>
-                <p>Compte tenu de la nature de nos produits, les retours ne sont généralement pas possibles. Cependant, en cas de défaut ou d'erreur de notre part, nous vous proposerons une solution adaptée.</p>
-                <h2>2. Produits endommagés à la livraison</h2>
-                <p>Contactez notre service client dans les 48 heures avec photos à l'appui.</p>
-                <h2>3. Procédure de retour</h2>
-                <p>Contactez-nous à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a> avec votre numéro de commande et le motif du retour.</p>
-                <h2>4. Remboursements</h2>
-                <p>Après approbation, le remboursement sera traité sous 14 jours ouvrés sur le moyen de paiement d'origine.</p>
-                <h2>5. Annulation de commande</h2>
-                <p>Une commande peut être annulée uniquement avant son expédition.</p>
-                <h2>6. Contact</h2>
-                <p>Email : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a> ou WhatsApp.</p>
-            """),
-            "politique-confidentialite": ("Politique de confidentialité", """
-                <p><em>Vos données, notre responsabilité.</em></p>
-                <h2>1. Quelles données collectons-nous ?</h2>
-                <p>Nom, adresse, email, téléphone — uniquement les données nécessaires au traitement des commandes.</p>
-                <h2>2. Comment utilisons-nous vos données ?</h2>
-                <p>Traitement des commandes, communication, service client.</p>
-                <h2>3. Protection et sécurité</h2>
-                <p>Chiffrement SSL, prestataires sécurisés, contrôle d'accès strict.</p>
-                <h2>4. Partage avec des tiers</h2>
-                <p>Uniquement avec les transporteurs et prestataires de paiement.</p>
-                <h2>5. Durée de conservation</h2>
-                <p>Vos données ne seront pas conservées plus longtemps que nécessaire.</p>
-                <h2>6. Vos droits</h2>
-                <p>Accès, rectification, suppression, opposition. Écrivez à <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a>.</p>
-                <h2>7. Cookies</h2>
-                <p>Cookies fonctionnels uniquement (panier).</p>
-                <h2>8. Contact</h2>
-                <p>Pour toute question : <a href="mailto:info@monjaroo.shop">info@monjaroo.shop</a></p>
-            """),
+            "conditions-generales": ("Conditions générales", "<h2>1. Objet</h2><p>Les présentes conditions régissent l'utilisation du site Monjaroo.shop.</p><h2>2. Produits</h2><p>Tous les produits sont destinés à un usage strictement personnel et légal.</p><h2>3. Commande</h2><p>Toute commande implique l'acceptation sans réserve des présentes conditions.</p><h2>4. Prix et paiement</h2><p>Les prix sont indiqués en euros, toutes taxes comprises.</p><h2>5. Livraison</h2><p>Les produits sont expédiés dans un emballage neutre et discret sous 3 à 10 jours ouvrés.</p>"),
+            "retours-remboursements": ("Retours et remboursements", "<h2>1. Politique de retour</h2><p>Vous disposez de 14 jours à compter de la réception pour demander un retour.</p><h2>2. Conditions</h2><ul><li>Emballage d'origine non ouvert</li><li>Produits pharmaceutiques non repris</li></ul><h2>3. Procédure</h2><p>Contactez-nous à info@monjaroo.shop ou par WhatsApp.</p><h2>4. Remboursement</h2><p>Sous 14 jours sur le moyen de paiement d'origine.</p>"),
+            "politique-confidentialite": ("Politique de confidentialité", "<h2>1. Données collectées</h2><p>Uniquement les données nécessaires au traitement des commandes.</p><h2>2. Utilisation</h2><p>Traitement des commandes et suivi.</p><h2>3. Partage</h2><p>Vos données ne sont jamais vendues.</p><h2>4. Cookies</h2><p>Cookies techniques et analytiques anonymes.</p><h2>5. Vos droits (RGPD)</h2><p>Écrivez à info@monjaroo.shop.</p>"),
         }
         for slug, (titre, contenu) in pages.items():
             if not Page.query.filter_by(slug=slug).first():
                 db.session.add(Page(titre=titre, slug=slug, contenu=contenu, afficher_menu=False))
 
-        # FAQ
         if not FAQ.query.first():
             db.session.add_all([
                 FAQ(question="Quels produits propose la boutique Monjaroo ?",
-                    reponse="Nous proposons une large gamme de produits de bien-être : peptides pour la recherche, médicaments, compléments alimentaires et pilules.", ordre=1),
+                    reponse="Nous proposons une large gamme de produits de bien-être : peptides, médicaments et pilules.", ordre=1),
                 FAQ(question="Vos produits sont-ils sûrs et homologués ?",
-                    reponse="Tous nos produits proviennent de fournisseurs de confiance et respectent les normes de qualité les plus strictes.", ordre=2),
+                    reponse="Tous nos produits proviennent de fournisseurs de confiance.", ordre=2),
                 FAQ(question="Combien de temps prend la livraison ?",
-                    reponse="Les commandes sont traitées sous 1 à 2 jours ouvrés. La livraison standard prend généralement entre 3 et 7 jours.", ordre=3),
+                    reponse="1 à 2 jours ouvrés de traitement. Livraison 3-7 jours.", ordre=3),
                 FAQ(question="Proposez-vous la livraison internationale ?",
-                    reponse="Oui, nous livrons dans la plupart des pays européens et certaines destinations internationales.", ordre=4),
+                    reponse="Oui, dans la plupart des pays européens et internationalement.", ordre=4),
                 FAQ(question="Quels modes de paiement acceptez-vous ?",
-                    reponse="Nous acceptons plusieurs modes de paiement sécurisés (carte bancaire, virement). Contactez-nous par WhatsApp pour connaître les options disponibles.", ordre=5),
+                    reponse="Carte bancaire, virement. Contactez-nous par WhatsApp.", ordre=5),
                 FAQ(question="Puis-je retourner ou échanger ma commande ?",
-                    reponse="En raison de la nature de nos produits, les retours ne sont acceptés qu'en cas d'erreur de notre part ou de produit défectueux.", ordre=6),
+                    reponse="Retours uniquement en cas d'erreur de notre part.", ordre=6),
                 FAQ(question="Comment puis-je contacter le service client ?",
-                    reponse="Par WhatsApp (bouton flottant), par email à info@monjaroo.shop, ou par téléphone au +33 6 44 69 06 92.", ordre=7),
-                FAQ(question="Vos compléments alimentaires conviennent-ils à tout le monde ?",
-                    reponse="Nos produits sont destinés à un usage adulte. Consultez un médecin en cas de doute.", ordre=8),
-                FAQ(question="Comment dois-je conserver mes compléments alimentaires ?",
-                    reponse="Conservez vos produits dans un endroit sec, à l'abri de la lumière et à température ambiante (15-25°C).", ordre=9),
+                    reponse="WhatsApp, info@monjaroo.shop, ou +33 6 44 69 06 92.", ordre=7),
+                FAQ(question="Vos compléments conviennent-ils à tout le monde ?",
+                    reponse="Usage adulte. Consultez un médecin en cas de doute.", ordre=8),
+                FAQ(question="Comment conserver mes produits ?",
+                    reponse="Endroit sec, à l'abri de la lumière, 15-25°C.", ordre=9),
             ])
 
-        # AVIS
         if not Avis.query.first():
             prenoms = ["Daniel R.", "Saar B.", "Dennis W.", "Marie L.", "Julien K.", "Sophie M.", "Antoine D.", "Camille B.", "Lucas P.", "Emma T.",
                        "Hugo V.", "Léa R.", "Nathan G.", "Chloé F.", "Maxime H.", "Manon S.", "Théo J.", "Sarah N.", "Alexandre C.", "Inès B.",
@@ -3435,23 +3871,22 @@ def seed():
                                     note=5 if i % 8 else 4,
                                     texte=textes[i % len(textes)], ordre=i, valide=True))
 
-        # ARTICLES BLOG
         if not Article.query.first():
             db.session.add_all([
                 Article(titre="Que sont les peptides ?", slug="que-sont-les-peptides",
                         categorie="blog peptides",
-                        extrait="Les peptides sont de courtes chaînes d'acides aminés. Les acides aminés sont les constituants des protéines dans l'organisme...",
-                        contenu="<p>Les peptides sont de courtes chaînes d'acides aminés qui jouent un rôle clé dans de nombreux processus biologiques.</p>",
+                        extrait="Les peptides sont de courtes chaînes d'acides aminés...",
+                        contenu="<p>Les peptides sont de courtes chaînes d'acides aminés.</p>",
                         date=datetime(2026, 1, 22)),
                 Article(titre="Acheter des médicaments en ligne : sûr, discret et fiable",
                         slug="acheter-medicaments-en-ligne", categorie="Médicament",
-                        extrait="De plus en plus de personnes choisissent d'acheter leurs médicaments en ligne...",
-                        contenu="<p>Acheter des médicaments en ligne est pratique, discret et sécurisé.</p>",
+                        extrait="De plus en plus de personnes achètent leurs médicaments en ligne...",
+                        contenu="<p>Acheter en ligne est pratique, discret et sécurisé.</p>",
                         date=datetime(2025, 12, 28)),
-                Article(titre="Que sont les peptides et pourquoi sont-ils de plus en plus populaires ?",
+                Article(titre="Que sont les peptides et pourquoi sont-ils populaires ?",
                         slug="pourquoi-peptides-populaires", categorie="peptides",
-                        extrait="Les peptides connaissent une popularité croissante ces dernières années...",
-                        contenu="<p>Les peptides connaissent une popularité croissante dans le domaine de la recherche.</p>",
+                        extrait="Les peptides connaissent une popularité croissante...",
+                        contenu="<p>Les peptides sont de plus en plus étudiés.</p>",
                         date=datetime(2025, 12, 4)),
             ])
 
@@ -3465,7 +3900,7 @@ def seed():
 
 
 # =============================================================
-# INITIALISATION AU DEMARRAGE (obligatoire pour Render/gunicorn)
+# INITIALISATION AU DEMARRAGE (pour Render/gunicorn)
 # =============================================================
 with app.app_context():
     try:
