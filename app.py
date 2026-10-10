@@ -1,6 +1,8 @@
 # =============================================================
-#  Monjaroo.shop — app.py v15
-#  + Galerie 5 photos par produit avec carrousel auto
+#  Monjaroo.shop — app.py v16
+#  + 5 photos multi-upload (PC + téléphone)
+#  + Carrousel auto côté visiteur
+#  + Prévisualisation avant upload
 # =============================================================
 
 from flask import (Flask, render_template, request, redirect, url_for,
@@ -50,6 +52,7 @@ class Config:
 
     UPLOAD_FOLDER = UPLOAD_DIR
     MAX_PHOTOS = MAX_PHOTOS_PAR_PRODUIT
+    MAX_CONTENT_LENGTH = 32 * 1024 * 1024   # 32 Mo par requête (utile pour mobile)
 
     LANGUAGES = {
         "fr": ("Français", "🇫🇷"),
@@ -99,6 +102,9 @@ ICONS = {
     "shield": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z'/><path d='m9 12 2 2 4-4'/></svg>",
     "camera": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'/><circle cx='12' cy='13' r='4'/></svg>",
     "trash": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z'/></svg>",
+    "upload": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12'/></svg>",
+    "arrow-left": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m15 18-6-6 6-6'/></svg>",
+    "arrow-right": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m9 18 6-6-6-6'/></svg>",
 }
 
 # =============================================================
@@ -108,7 +114,7 @@ T = {
     "fr": {
         "welcome": "Bienvenue dans la boutique Monjaroo",
         "hero_title": "Produits de bien-être haut de gamme pour la santé quotidienne",
-        "hero_text": "Découvrez des compléments alimentaires et produits de bien-être de qualité supérieure, rigoureusement testés et approuvés, pour soutenir votre corps, stimuler votre énergie et favoriser une vitalité durable.",
+        "hero_text": "Découvrez des compléments alimentaires et produits de bien-être de qualité supérieure.",
         "buy_now": "Achetez maintenant",
         "search": "Rechercher", "search_ph": "Rechercher un produit...",
         "login": "Se connecter", "register": "S'inscrire", "logout": "Se déconnecter",
@@ -128,7 +134,7 @@ T = {
         "features_ship": "Livraison express gratuite avec suivi.",
         "features_support": "Assistance en ligne 24h/24 et 7j/7.",
         "newsletter": "Bénéficiez de 10 % de réduction sur votre prochaine commande",
-        "newsletter_sub": "Inscrivez-vous à notre newsletter pour recevoir nos offres exclusives.",
+        "newsletter_sub": "Inscrivez-vous à notre newsletter.",
         "subscribe": "S'inscrire", "email_ph": "Votre adresse e-mail",
         "about_us": "À propos de nous", "about_title": "Promouvoir la santé par la qualité et les soins",
         "about_text": "Chez Monjaroo.shop, nous croyons que la véritable santé commence par la confiance.",
@@ -168,13 +174,17 @@ T = {
         "photos_upload": "Ajouter jusqu'à 5 photos",
         "photos_max": "Maximum 5 photos par produit",
         "photos_current": "Photos actuelles",
-        "upload": "Téléverser",
+        "upload": "Téléverser les photos",
         "delete": "Supprimer",
+        "choose_photos": "Choisir une ou plusieurs photos (PC ou téléphone)",
+        "photos_selected": "photo(s) sélectionnée(s)",
+        "photos_preview": "Aperçu avant envoi",
+        "photos_limit": "Limite atteinte",
     },
     "en": {
         "welcome": "Welcome to the Monjaroo shop",
         "hero_title": "Premium wellness products for daily health",
-        "hero_text": "Discover high-quality supplements and wellness products, rigorously tested and approved.",
+        "hero_text": "Discover high-quality supplements and wellness products.",
         "buy_now": "Shop now", "search": "Search", "search_ph": "Search for a product...",
         "login": "Sign in", "register": "Sign up", "logout": "Sign out",
         "account": "My account", "cart": "Cart", "empty_cart": "Your cart is empty.",
@@ -230,8 +240,12 @@ T = {
         "photos_upload": "Add up to 5 photos",
         "photos_max": "Maximum 5 photos per product",
         "photos_current": "Current photos",
-        "upload": "Upload",
+        "upload": "Upload photos",
         "delete": "Delete",
+        "choose_photos": "Choose one or several photos (PC or phone)",
+        "photos_selected": "photo(s) selected",
+        "photos_preview": "Preview before upload",
+        "photos_limit": "Limit reached",
     },
     "nl": {
         "welcome": "Welkom bij Monjaroo",
@@ -292,8 +306,12 @@ T = {
         "photos_upload": "Max 5 foto's toevoegen",
         "photos_max": "Max 5 foto's per product",
         "photos_current": "Huidige foto's",
-        "upload": "Uploaden",
+        "upload": "Foto's uploaden",
         "delete": "Verwijderen",
+        "choose_photos": "Kies één of meerdere foto's (PC of telefoon)",
+        "photos_selected": "foto('s) geselecteerd",
+        "photos_preview": "Voorbeeld voor upload",
+        "photos_limit": "Limiet bereikt",
     },
     "de": {
         "welcome": "Willkommen bei Monjaroo",
@@ -354,8 +372,12 @@ T = {
         "photos_upload": "Max 5 Fotos hochladen",
         "photos_max": "Max 5 Fotos pro Produkt",
         "photos_current": "Aktuelle Fotos",
-        "upload": "Hochladen",
+        "upload": "Fotos hochladen",
         "delete": "Löschen",
+        "choose_photos": "Wählen Sie ein oder mehrere Fotos (PC oder Handy)",
+        "photos_selected": "Foto(s) ausgewählt",
+        "photos_preview": "Vorschau vor Upload",
+        "photos_limit": "Limit erreicht",
     },
     "it": {
         "welcome": "Benvenuto da Monjaroo",
@@ -416,8 +438,12 @@ T = {
         "photos_upload": "Aggiungi fino a 5 foto",
         "photos_max": "Max 5 foto per prodotto",
         "photos_current": "Foto attuali",
-        "upload": "Carica",
+        "upload": "Carica foto",
         "delete": "Elimina",
+        "choose_photos": "Scegli una o più foto (PC o telefono)",
+        "photos_selected": "foto selezionate",
+        "photos_preview": "Anteprima prima del caricamento",
+        "photos_limit": "Limite raggiunto",
     },
     "es": {
         "welcome": "Bienvenido a Monjaroo",
@@ -478,8 +504,12 @@ T = {
         "photos_upload": "Añadir hasta 5 fotos",
         "photos_max": "Máximo 5 fotos por producto",
         "photos_current": "Fotos actuales",
-        "upload": "Subir",
+        "upload": "Subir fotos",
         "delete": "Eliminar",
+        "choose_photos": "Elige una o varias fotos (PC o móvil)",
+        "photos_selected": "foto(s) seleccionada(s)",
+        "photos_preview": "Vista previa antes de subir",
+        "photos_limit": "Límite alcanzado",
     },
 }
 
@@ -879,7 +909,7 @@ app.jinja_env.globals["_"] = _
 app.jinja_env.globals["admin_only"] = _admin_only
 app.jinja_env.globals["MAX_PHOTOS"] = MAX_PHOTOS_PAR_PRODUIT
 # =============================================================
-# CSS RESPONSIVE + STYLES GALERIE/CARROUSEL
+# CSS RESPONSIVE + GALERIE + PRÉVISUALISATION UPLOAD
 # =============================================================
 CSS = """
 :root{
@@ -1042,209 +1072,114 @@ button{font-family:inherit}
 .avis-form .stars-input input:checked ~ label svg{fill:#f5b301}
 
 /* ============================================================
-   GALERIE PHOTO PRODUIT (page publique)
+   GALERIE CARROUSEL (page produit visiteur)
    ============================================================ */
 .product-page{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
-
-/* Carrousel principal */
 .gallery-wrap{position:sticky;top:20px}
-.gallery-main{
-  position:relative;
-  aspect-ratio:1/1;
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  overflow:hidden;
-  box-shadow:0 4px 16px rgba(0,0,0,.06);
-}
-.gallery-main .slide{
-  position:absolute;
-  inset:0;
-  opacity:0;
-  transition:opacity .6s ease-in-out;
-  background-size:cover;
-  background-position:center;
-  background-repeat:no-repeat;
-}
+.gallery-main{position:relative;aspect-ratio:1/1;background:#fff;
+  border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.gallery-main .slide{position:absolute;inset:0;opacity:0;
+  transition:opacity .6s ease-in-out;background-size:cover;
+  background-position:center;background-repeat:no-repeat}
 .gallery-main .slide.active{opacity:1}
-
-/* Compteur en haut à droite */
-.gallery-main .counter{
-  position:absolute;
-  top:12px;
-  right:12px;
-  background:rgba(0,0,0,.55);
-  color:#fff;
-  font-size:12px;
-  padding:4px 10px;
-  border-radius:20px;
-  font-weight:600;
-  z-index:5;
-  backdrop-filter:blur(4px);
-}
-
-/* Flèches de navigation */
-.gallery-main .nav-btn{
-  position:absolute;
-  top:50%;
-  transform:translateY(-50%);
-  width:38px;
-  height:38px;
-  border-radius:50%;
-  background:rgba(255,255,255,.9);
-  border:0;
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.15);
-  z-index:5;
-  color:#111;
-  transition:background var(--transition);
-}
+.gallery-main .counter{position:absolute;top:12px;right:12px;
+  background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:4px 10px;
+  border-radius:20px;font-weight:600;z-index:5;backdrop-filter:blur(4px)}
+.gallery-main .nav-btn{position:absolute;top:50%;transform:translateY(-50%);
+  width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.9);
+  border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:5;color:#111;
+  transition:background var(--transition)}
 .gallery-main .nav-btn:hover{background:#fff}
 .gallery-main .nav-btn.prev{left:12px}
 .gallery-main .nav-btn.next{right:12px}
-.gallery-main .nav-btn svg{width:18px;height:18px}
-
-/* Points indicateurs */
-.gallery-main .dots{
-  position:absolute;
-  bottom:12px;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  gap:6px;
-  z-index:5;
-}
-.gallery-main .dots span{
-  width:8px;
-  height:8px;
-  border-radius:50%;
-  background:rgba(255,255,255,.6);
-  cursor:pointer;
-  transition:all .3s;
-}
-.gallery-main .dots span.active{
-  background:#fff;
-  width:24px;
-  border-radius:4px;
-}
-
-/* Miniatures */
-.gallery-thumbs{
-  display:flex;
-  gap:10px;
-  margin-top:14px;
-  flex-wrap:wrap;
-  justify-content:center;
-}
-.gallery-thumb{
-  width:70px;
-  height:70px;
-  border-radius:8px;
-  border:2px solid transparent;
-  background-size:cover;
-  background-position:center;
-  cursor:pointer;
-  transition:all var(--transition);
-  background-color:#f7f7f9;
-}
+.gallery-main .nav-btn svg{width:18px;height:18px;pointer-events:none}
+.gallery-main .dots{position:absolute;bottom:12px;left:50%;
+  transform:translateX(-50%);display:flex;gap:6px;z-index:5}
+.gallery-main .dots span{width:8px;height:8px;border-radius:50%;
+  background:rgba(255,255,255,.6);cursor:pointer;transition:all .3s}
+.gallery-main .dots span.active{background:#fff;width:24px;border-radius:4px}
+.gallery-thumbs{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;justify-content:center}
+.gallery-thumb{width:70px;height:70px;border-radius:8px;border:2px solid transparent;
+  background-size:cover;background-position:center;cursor:pointer;
+  transition:all var(--transition);background-color:#f7f7f9}
 .gallery-thumb:hover{border-color:var(--violet)}
 .gallery-thumb.active{border-color:var(--violet);box-shadow:0 0 0 2px rgba(168,85,247,.2)}
 
 /* ============================================================
-   ADMIN — FORMULAIRE UPLOAD PHOTOS
+   ADMIN — ZONE UPLOAD PHOTOS (avec prévisualisation)
    ============================================================ */
-.photo-upload-section{
-  background:#f7f7f9;
-  border:1px dashed var(--border);
-  border-radius:var(--radius);
-  padding:20px;
-  margin:20px 0;
-}
-.photo-upload-section h3{
-  margin:0 0 8px;
-  color:var(--vert);
-  font-size:16px;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-.photo-upload-section .hint{
-  color:#777;
-  font-size:13px;
-  margin:0 0 14px;
-}
-.photo-upload-section input[type=file]{
-  width:100%;
-  padding:12px;
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  margin-bottom:12px;
-  font-size:13px;
-}
-.photo-upload-section button{
-  background:var(--violet);
-  color:#fff;
-  border:0;
-  padding:10px 22px;
-  border-radius:var(--radius-sm);
-  font-weight:600;
-  cursor:pointer;
-  font-family:inherit;
-}
-.photo-upload-section button:hover{background:var(--violet-fonce)}
+.photo-upload-section{background:#f7f7f9;border:1px dashed var(--border);
+  border-radius:var(--radius);padding:22px;margin:20px 0}
+.photo-upload-section h3{margin:0 0 8px;color:var(--vert);font-size:16px;
+  display:flex;align-items:center;gap:8px}
+.photo-upload-section h3 svg{width:22px;height:22px;color:var(--vert)}
+.photo-upload-section .hint{color:#777;font-size:13px;margin:0 0 14px}
 
-.photo-grid{
+/* Choix fichiers */
+.photo-upload-section .file-label{
+  display:inline-flex;align-items:center;gap:10px;
+  background:var(--violet);color:#fff;
+  padding:14px 24px;border-radius:var(--radius-sm);
+  font-weight:600;cursor:pointer;
+  font-size:14px;transition:background var(--transition);
+  border:0;font-family:inherit;
+  box-shadow:0 2px 8px rgba(168,85,247,.25);
+}
+.photo-upload-section .file-label:hover{background:var(--violet-fonce)}
+.photo-upload-section .file-label svg{width:20px;height:20px;pointer-events:none}
+.photo-upload-section input[type=file]{position:absolute;width:1px;height:1px;
+  opacity:0;overflow:hidden;z-index:-1}
+
+/* Prévisualisation */
+.preview-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
-  gap:12px;
-  margin-top:14px;
+  grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
+  gap:10px;
+  margin:16px 0;
 }
-.photo-item{
-  position:relative;
-  aspect-ratio:1/1;
-  border-radius:8px;
-  overflow:hidden;
-  background:#fff;
-  border:1px solid var(--border);
-}
+.preview-item{position:relative;aspect-ratio:1/1;border-radius:8px;
+  overflow:hidden;background:#fff;border:1px solid var(--border);
+  box-shadow:0 2px 6px rgba(0,0,0,.05)}
+.preview-item img{width:100%;height:100%;object-fit:cover}
+.preview-item .remove-btn{position:absolute;top:4px;right:4px;width:24px;
+  height:24px;border-radius:50%;background:rgba(239,68,68,.95);color:#fff;
+  border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:14px;line-height:1;font-weight:700;padding:0}
+
+/* Compteur visible */
+.photo-counter{display:inline-block;background:var(--violet);color:#fff;
+  font-size:12px;padding:3px 10px;border-radius:12px;font-weight:600;margin-left:8px}
+.photo-counter.warn{background:#dc2626}
+
+/* Grille des photos déjà uploadées */
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+  gap:12px;margin-top:14px}
+.photo-item{position:relative;aspect-ratio:1/1;border-radius:8px;overflow:hidden;
+  background:#fff;border:1px solid var(--border)}
 .photo-item img{width:100%;height:100%;object-fit:cover}
-.photo-item .del-btn{
-  position:absolute;
-  top:6px;
-  right:6px;
-  width:26px;
-  height:26px;
-  border-radius:50%;
-  background:rgba(239,68,68,.95);
-  color:#fff;
-  border:0;
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:16px;
-  line-height:1;
-  font-weight:700;
-  padding:0;
-}
+.photo-item .del-btn{position:absolute;top:6px;right:6px;width:26px;height:26px;
+  border-radius:50%;background:rgba(239,68,68,.95);color:#fff;border:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  line-height:1;font-weight:700;padding:0}
 .photo-item .del-btn:hover{background:#dc2626}
 
-.photo-counter{
-  display:inline-block;
-  background:var(--violet);
-  color:#fff;
-  font-size:12px;
-  padding:3px 10px;
-  border-radius:12px;
-  font-weight:600;
-  margin-left:8px;
-}
+/* Message "limite atteinte" */
+.limit-warning{padding:12px 14px;background:#fef3c7;color:#92400e;
+  border-radius:6px;font-size:13px;margin-bottom:12px;font-weight:500}
+.limit-info{padding:12px 14px;background:#e0f2fe;color:#075985;
+  border-radius:6px;font-size:13px;margin-bottom:12px}
 
-/* FLOAT BTNS */
+/* Bouton upload principal */
+.btn-upload{background:var(--violet);color:#fff;border:0;padding:12px 26px;
+  border-radius:var(--radius-sm);font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}
+.btn-upload:hover{background:var(--violet-fonce)}
+.btn-upload:disabled{background:#ccc;cursor:not-allowed}
+.btn-upload svg{width:20px;height:20px;pointer-events:none}
+
+/* Float buttons */
 .float-btns{position:fixed;bottom:20px;right:20px;z-index:99999;
   display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none}
 .float-btns > *{pointer-events:auto}
@@ -1351,8 +1286,7 @@ details p{margin:0;padding:0 20px 16px;color:#555;font-size:14px;line-height:1.7
 .newsletter h2{color:#fff;font-size:24px;margin:0 0 8px}
 .newsletter p{color:#c9dede;margin-bottom:22px;font-size:14px}
 .newsletter form{display:flex;gap:10px;max-width:520px;margin:0 auto 14px;flex-wrap:wrap;justify-content:center}
-.newsletter input{flex:1;min-width:220px;padding:12px 18px;border:0;
-  border-radius:30px;font-size:14px}
+.newsletter input{flex:1;min-width:220px;padding:12px 18px;border:0;border-radius:30px;font-size:14px}
 .newsletter button{background:var(--violet);color:#fff;border:0;padding:12px 26px;
   border-radius:30px;font-weight:700;cursor:pointer}
 
@@ -1445,9 +1379,7 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 .checkout-btn:hover{background:#1eb955}
 .checkout-btn svg{width:24px;height:24px;fill:#fff;pointer-events:none}
 
-/* ============================================================
-   RESPONSIVE TABLETTE
-   ============================================================ */
+/* RESPONSIVE */
 @media(max-width:1024px){
   .hero h1{font-size:36px}
   .hero{min-height:420px;padding:60px 20px}
@@ -1460,9 +1392,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .product-page{gap:24px}
 }
 
-/* ============================================================
-   RESPONSIVE MOBILE
-   ============================================================ */
 @media(max-width:768px){
   .topbar{padding:6px 12px;font-size:12px;flex-wrap:wrap;gap:6px}
   .topbar .left,.topbar .right{gap:6px}
@@ -1508,18 +1437,9 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .section-sm{padding:24px 16px}
   .about{grid-template-columns:1fr;gap:24px}
   .about h2{font-size:22px}
-  .about .label{font-size:12px}
   .violet-section{padding:36px 18px}
   .violet-section h2{font-size:22px;margin-bottom:20px}
   .violet-section h3{font-size:17px;margin:20px 0 8px}
-  .violet-section p{font-size:14px}
-
-  .avis-title{font-size:22px}
-  .avis-stats{gap:16px;padding:14px 16px;margin-bottom:20px}
-  .avis-stats .big{font-size:30px}
-  .avis-grid{grid-template-columns:1fr;gap:14px}
-  .avis-card{padding:18px}
-  .avis-form{padding:20px}
 
   .product-page{grid-template-columns:1fr !important;gap:20px !important}
   .gallery-wrap{position:static}
@@ -1531,10 +1451,8 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .card-price{font-size:15px}
   .card-form input[type=number]{width:44px;padding:6px;font-size:13px}
   .card-form button{padding:8px;font-size:12px}
-  .card-cat{font-size:10px;padding:2px 8px}
 
   .blog-grid{grid-template-columns:1fr;gap:16px}
-  .blog-card-body{padding:16px}
 
   .newsletter{padding:32px 16px}
   .newsletter h2{font-size:18px}
@@ -1543,8 +1461,6 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
 
   footer{padding:32px 16px 20px}
   .footer-grid{grid-template-columns:1fr 1fr;gap:20px}
-  .footer-grid h4{font-size:14px}
-  .footer-grid a{font-size:12px}
 
   .float-btns{bottom:14px;right:14px;gap:8px}
   .wa-cta{padding:8px 14px;font-size:12px}
@@ -1565,38 +1481,26 @@ button.btn{background:var(--violet);color:#fff;border:0;padding:8px 14px;
   .admin-main{padding:16px}
   .admin-main h1{font-size:20px;margin-bottom:16px}
   .stat-grid{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
-  .stat-card{padding:14px}
-  .stat-card .value{font-size:22px}
-  .stat-card .label{font-size:12px}
 
   .form button{padding:12px 20px;width:100%}
   .checkout-btn{padding:14px 20px;font-size:15px}
 
-  table{font-size:13px}
-  th,td{padding:8px;font-size:12px}
-
   .photo-grid{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
+  .preview-grid{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
+  .photo-upload-section{padding:16px}
+  .photo-upload-section .file-label{padding:12px 18px;font-size:13px;width:100%;justify-content:center}
+  .btn-upload{padding:11px 20px;font-size:13px;width:100%;justify-content:center}
 }
 
-/* ============================================================
-   TRÈS PETIT MOBILE
-   ============================================================ */
 @media(max-width:480px){
   .features{grid-template-columns:1fr}
   .grid{grid-template-columns:1fr 1fr;gap:10px}
   .card-form{flex-direction:column}
   .card-form input[type=number]{width:100%}
-  .card-form button{padding:9px}
   .footer-grid{grid-template-columns:1fr;text-align:center}
   .footer-grid ul{align-items:center}
   .hero h1{font-size:24px}
-  .hero p{font-size:13px}
-  .hero .btn{padding:10px 18px;font-size:13px}
-  .avis-stats{flex-direction:column;gap:12px;text-align:center}
   .stat-grid{grid-template-columns:1fr}
-  .header-right{gap:8px}
-  .header-right .cart-btn{padding:8px 10px;font-size:12px}
-  .float-btns{gap:6px}
   .wa-cta{display:none}
   .wa-btn,.cart-float{width:46px;height:46px}
   .gallery-thumbs{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}
@@ -1903,7 +1807,7 @@ TEMPLATES["admin_base"] = """
     <h2>MONJAROO ADMIN</h2>
     <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint=='admin_dashboard' %}active{% endif %}">📊 Dashboard</a>
     <a href="{{ url_for('admin_commandes') }}" class="{% if request.endpoint=='admin_commandes' %}active{% endif %}">📦 Commandes</a>
-    <a href="{{ url_for('admin_produits') }}" class="{% if request.endpoint in ['admin_produits','admin_produit_form'] %}active{% endif %}">🛒 Produits</a>
+    <a href="{{ url_for('admin_produits') }}" class="{% if request.endpoint in ['admin_produits','admin_produit_form','admin_produit_photos'] %}active{% endif %}">🛒 Produits</a>
     <a href="{{ url_for('admin_categories') }}" class="{% if request.endpoint=='admin_categories' %}active{% endif %}">🗂 Catégories</a>
     <a href="{{ url_for('admin_utilisateurs') }}" class="{% if request.endpoint=='admin_utilisateurs' %}active{% endif %}">👥 Utilisateurs</a>
     <a href="{{ url_for('admin_avis') }}" class="{% if request.endpoint=='admin_avis' %}active{% endif %}">⭐ Avis</a>
@@ -2172,12 +2076,19 @@ TEMPLATES["admin_produits"] = """
 <tr><th>Image</th><th>Nom</th><th>Catégorie</th><th>Prix</th><th>Stock</th><th>Photos</th><th>Actif</th><th></th></tr>
 {% for p in produits %}
 <tr>
-  <td>{% if p.image %}<img src="{{ p.image }}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">{% endif %}</td>
+  <td>{% if p.image %}<img src="{{ p.image }}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">
+      {% elif p.photos %}<img src="{{ p.photos[0].chemin }}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">{% endif %}</td>
   <td>{{ p.nom }}<br><small>{{ p.sous_titre }}</small></td>
   <td>{{ p.categorie.nom if p.categorie else '—' }}</td>
   <td>{{ p.affichage_prix }}</td>
   <td>{{ p.stock }}</td>
-  <td><span style="background:#f3e8ff;color:#a855f7;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600">{{ p.photos|length }}/5</span></td>
+  <td>
+    <a href="{{ url_for('admin_produit_photos', pid=p.id) }}"
+       style="background:#f3e8ff;color:#a855f7;padding:4px 10px;border-radius:10px;
+              font-size:12px;font-weight:600;text-decoration:none;display:inline-block">
+      📷 {{ p.photos|length }}/{{ MAX_PHOTOS }}
+    </a>
+  </td>
   <td>{{ "oui" if p.actif else "non" }}</td>
   <td>
     <a href="{{ url_for('admin_produit_form', pid=p.id) }}">Éditer</a>
@@ -2212,6 +2123,147 @@ TEMPLATES["admin_produit_form"] = """
   <label><input type="checkbox" name="actif" {% if produit.actif %}checked{% endif %}> Actif</label>
   <button type="submit">Enregistrer</button>
 </form>
+
+{% if produit.id %}
+<div class="photo-upload-section" style="max-width:700px;margin-top:28px">
+  <h3>
+    {{ 'camera'|icon()|safe }} {{ _('photos_upload') }}
+    <span class="photo-counter {% if produit.photos|length >= MAX_PHOTOS %}warn{% endif %}">
+      {{ produit.photos|length }} / {{ MAX_PHOTOS }}
+    </span>
+  </h3>
+  <p class="hint">Gérez la galerie photos de ce produit. Vous pouvez en ajouter jusqu'à {{ MAX_PHOTOS }}.</p>
+  <a class="btn-link" href="{{ url_for('admin_produit_photos', pid=produit.id) }}">
+    {{ 'camera'|icon()|safe }} Ouvrir la galerie photos
+  </a>
+</div>
+{% else %}
+<div class="photo-upload-section" style="max-width:700px;margin-top:28px">
+  <h3>{{ 'camera'|icon()|safe }} {{ _('photos_upload') }}</h3>
+  <p class="hint">💡 Enregistrez d'abord le produit pour pouvoir ajouter ses photos.</p>
+</div>
+{% endif %}
+{% endblock %}
+"""
+
+TEMPLATES["admin_produit_photos"] = """
+{% extends "admin_base" %}
+{% block content %}
+<h1>Photos : {{ produit.nom }}</h1>
+<p style="color:#666;margin-bottom:20px">
+  <a href="{{ url_for('admin_produit_form', pid=produit.id) }}">← Retour à l'édition du produit</a>
+</p>
+
+{% set nb = produit.photos|length %}
+{% set slots = MAX_PHOTOS - nb %}
+
+<div class="photo-upload-section">
+  <h3>
+    {{ 'camera'|icon()|safe }} {{ _('photos_upload') }}
+    <span class="photo-counter {% if nb >= MAX_PHOTOS %}warn{% endif %}">{{ nb }} / {{ MAX_PHOTOS }}</span>
+  </h3>
+  <p class="hint">{{ _('choose_photos') }}</p>
+
+  {% if nb >= MAX_PHOTOS %}
+    <div class="limit-warning">⚠️ {{ _('photos_limit') }} — Supprimez une photo avant d'en ajouter une autre.</div>
+  {% else %}
+    <div class="limit-info">
+      ✅ Vous pouvez encore ajouter <strong>{{ slots }}</strong> photo(s).
+    </div>
+
+    <form method="post" enctype="multipart/form-data"
+          action="{{ url_for('admin_produit_photo_upload', pid=produit.id) }}"
+          id="uploadForm">
+      <label class="file-label" for="photosInput">
+        {{ 'upload'|icon()|safe }}
+        <span id="fileLabelText">Choisir une ou plusieurs photos</span>
+      </label>
+      <input type="file" id="photosInput" name="photos" accept="image/*" multiple
+             onchange="previewPhotos(event, {{ slots }})">
+
+      <div id="previewGrid" class="preview-grid"></div>
+
+      <button type="submit" class="btn-upload" id="uploadBtn" disabled>
+        {{ 'check'|icon()|safe }} {{ _('upload') }}
+      </button>
+    </form>
+  {% endif %}
+</div>
+
+{% if produit.photos %}
+  <h3 style="color:var(--vert);margin-top:28px">{{ _('photos_current') }} ({{ nb }})</h3>
+  <div class="photo-grid">
+    {% for photo in produit.photos %}
+    <div class="photo-item">
+      <img src="{{ photo.chemin }}" alt="Photo {{ loop.index }}">
+      <form method="post"
+            action="{{ url_for('admin_produit_photo_supprimer', pid=produit.id, photo_id=photo.id) }}"
+            style="position:absolute;top:6px;right:6px;margin:0">
+        <button type="submit" class="del-btn"
+                onclick="return confirm('Supprimer cette photo ?')"
+                title="{{ _('delete') }}">×</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p style="color:#999;margin-top:20px">Aucune photo pour ce produit. Ajoutez-en jusqu'à {{ MAX_PHOTOS }}.</p>
+{% endif %}
+
+<script>
+var selectedFiles = [];
+
+function previewPhotos(event, maxSlots){
+  var files = event.target.files;
+  var grid = document.getElementById('previewGrid');
+  var btn = document.getElementById('uploadBtn');
+  var label = document.getElementById('fileLabelText');
+  grid.innerHTML = '';
+  selectedFiles = [];
+
+  var nbTaken = 0;
+  for(var i = 0; i < files.length; i++){
+    if(nbTaken >= maxSlots){
+      alert('Maximum ' + maxSlots + ' photo(s) à la fois.');
+      break;
+    }
+    var f = files[i];
+    if(!f.type.startsWith('image/')) continue;
+    selectedFiles.push(f);
+    nbTaken++;
+
+    var reader = new FileReader();
+    (function(file, idx){
+      reader.onload = function(e){
+        var div = document.createElement('div');
+        div.className = 'preview-item';
+        div.innerHTML = '<img src="' + e.target.result + '">' +
+          '<button type="button" class="remove-btn" onclick="removePreview(' + idx + ')">×</button>';
+        grid.appendChild(div);
+      };
+      reader.readAsDataURL(file);
+    })(f, nbTaken - 1);
+  }
+
+  if(selectedFiles.length > 0){
+    label.textContent = selectedFiles.length + ' {{ _("photos_selected") }}';
+    btn.disabled = false;
+  } else {
+    label.textContent = 'Choisir une ou plusieurs photos';
+    btn.disabled = true;
+  }
+}
+
+function removePreview(idx){
+  selectedFiles.splice(idx, 1);
+  var input = document.getElementById('photosInput');
+  var dt = new DataTransfer();
+  selectedFiles.forEach(function(f){ dt.items.add(f); });
+  input.files = dt.files;
+  var evt = { target: { files: input.files } };
+  previewPhotos(evt, {{ slots if slots is defined else MAX_PHOTOS }});
+}
+</script>
 {% endblock %}
 """
 
@@ -2318,57 +2370,6 @@ TEMPLATES["admin_faq"] = """
   <p style="color:#555">{{ q.reponse }}</p>
 </div>
 {% endfor %}
-{% endblock %}
-"""
-
-TEMPLATES["admin_produit_photos"] = """
-{% extends "admin_base" %}
-{% block content %}
-<h1>Photos du produit : {{ produit.nom }}</h1>
-<p style="color:#666;margin-bottom:20px">
-  <a href="{{ url_for('admin_produit_form', pid=produit.id) }}">← Retour à l'édition du produit</a>
-</p>
-
-<div class="photo-upload-section">
-  <h3>
-    {{ 'camera'|icon()|safe }} {{ _('photos_upload') }}
-    <span class="photo-counter">{{ produit.photos|length }} / {{ MAX_PHOTOS }}</span>
-  </h3>
-  <p class="hint">{{ _('photos_max') }}</p>
-
-  {% if produit.photos|length >= MAX_PHOTOS %}
-    <div style="padding:12px;background:#fef3c7;color:#92400e;border-radius:6px;font-size:13px">
-      ⚠️ Maximum atteint ({{ MAX_PHOTOS }} photos). Supprimez une photo avant d'en ajouter une nouvelle.
-    </div>
-  {% else %}
-    <form method="post" enctype="multipart/form-data"
-          action="{{ url_for('admin_produit_photo_upload', pid=produit.id) }}">
-      <input type="file" name="photos" accept="image/*" multiple required>
-      <button type="submit">{{ 'check'|icon()|safe }} {{ _('upload') }}</button>
-    </form>
-  {% endif %}
-</div>
-
-{% if produit.photos %}
-  <h3 style="color:var(--vert);margin-top:28px">{{ _('photos_current') }}</h3>
-  <div class="photo-grid">
-    {% for photo in produit.photos %}
-    <div class="photo-item">
-      <img src="{{ photo.chemin }}" alt="Photo {{ loop.index }}">
-      <form method="post"
-            action="{{ url_for('admin_produit_photo_supprimer', pid=produit.id, photo_id=photo.id) }}"
-            style="position:absolute;top:6px;right:6px;margin:0">
-        <button type="submit" class="del-btn"
-                onclick="return confirm('Supprimer cette photo ?')"
-                title="{{ _('delete') }}">×</button>
-      </form>
-    </div>
-    {% endfor %}
-  </div>
-{% else %}
-  <p style="color:#999;margin-top:20px">Aucune photo pour ce produit. Ajoutez-en jusqu'à {{ MAX_PHOTOS }}.</p>
-{% endif %}
-
 {% endblock %}
 """
 
@@ -2563,10 +2564,10 @@ TEMPLATES["produit"] = """
 
             {% if photos|length > 1 %}
               <button type="button" class="nav-btn prev" onclick="galleryPrev();return false;">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                {{ 'arrow-left'|icon()|safe }}
               </button>
               <button type="button" class="nav-btn next" onclick="galleryNext();return false;">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                {{ 'arrow-right'|icon()|safe }}
               </button>
 
               <div class="dots" id="galleryDots">
@@ -2665,10 +2666,8 @@ TEMPLATES["produit"] = """
     autoTimer = setInterval(function(){ show(current + 1); }, 4000);
   }
 
-  /* Défilement automatique toutes les 4 secondes */
   restartAuto();
 
-  /* Pause au survol */
   var main = document.getElementById('galleryMain');
   if(main){
     main.addEventListener('mouseenter', function(){ if(autoTimer) clearInterval(autoTimer); });
@@ -3525,7 +3524,6 @@ def admin_produit_form(pid=None):
 def admin_produit_supprimer(pid):
     if not _admin_only(): return redirect(url_for("admin_login"))
     p = Produit.query.get_or_404(pid)
-    # supprimer les fichiers photos
     for photo in p.photos:
         try:
             fp = os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(photo.chemin))
@@ -3538,7 +3536,7 @@ def admin_produit_supprimer(pid):
 
 
 # =============================================================
-# ADMIN — GESTION GALERIE PHOTOS PRODUIT
+# ADMIN — GALERIE PHOTOS (upload multiple PC + téléphone)
 # =============================================================
 @app.route("/admin/produits/<int:pid>/photos", methods=["GET"])
 @login_required
@@ -3553,26 +3551,44 @@ def admin_produit_photos(pid):
 def admin_produit_photo_upload(pid):
     if not _admin_only(): return redirect(url_for("admin_login"))
     produit = Produit.query.get_or_404(pid)
+
+    # 🔑 CORRECTION MAJEURE : getlist() récupère TOUS les fichiers envoyés
     files = request.files.getlist("photos")
-    deja = produit.photos.count() if hasattr(produit.photos, "count") else len(produit.photos)
+    print(f"[UPLOAD] {len(files)} fichier(s) reçu(s) pour produit {produit.nom}")
+
+    deja = len(produit.photos)
     slots_libres = MAX_PHOTOS_PAR_PRODUIT - deja
     if slots_libres <= 0:
         flash(f"Maximum {MAX_PHOTOS_PAR_PRODUIT} photos déjà atteint.", "error")
         return redirect(url_for("admin_produit_photos", pid=pid))
+
     ordre = deja
     ajoutees = 0
+    refusees = 0
+
     for f in files:
-        if ajoutees >= slots_libres: break
+        if ajoutees >= slots_libres:
+            refusees += 1
+            continue
+        if not f or not f.filename:
+            continue
         path = save_upload(f)
         if path:
             db.session.add(PhotoProduit(produit_id=produit.id, chemin=path, ordre=ordre))
             ordre += 1
             ajoutees += 1
+        else:
+            refusees += 1
+
     if ajoutees > 0:
         db.session.commit()
-        flash(f"{ajoutees} photo(s) ajoutée(s).", "success")
+        msg = f"{ajoutees} photo(s) ajoutée(s) avec succès."
+        if refusees > 0:
+            msg += f" {refusees} fichier(s) refusé(s)."
+        flash(msg, "success")
     else:
-        flash("Aucune photo valide.", "error")
+        flash("Aucune photo valide. Formats acceptés : png, jpg, jpeg, gif, webp, svg.", "error")
+
     return redirect(url_for("admin_produit_photos", pid=pid))
 
 
@@ -3583,7 +3599,6 @@ def admin_produit_photo_supprimer(pid, photo_id):
     photo = PhotoProduit.query.get_or_404(photo_id)
     if photo.produit_id != pid:
         return redirect(url_for("admin_produits"))
-    # supprimer le fichier
     try:
         fp = os.path.join(app.config["UPLOAD_FOLDER"], os.path.basename(photo.chemin))
         if os.path.exists(fp): os.remove(fp)
@@ -3721,7 +3736,7 @@ def server_error(e):
 
 
 # =============================================================
-# SEED — Données initiales
+# SEED
 # =============================================================
 def seed():
     try:
@@ -3751,7 +3766,7 @@ def seed():
             "hero_image": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1600",
             "hero_badge": "Bienvenue dans la boutique Monjaroo",
             "hero_titre": "Produits de bien-être haut de gamme pour la santé quotidienne",
-            "hero_texte": "Découvrez des compléments alimentaires et produits de bien-être de qualité supérieure, rigoureusement testés et approuvés.",
+            "hero_texte": "Découvrez des compléments alimentaires et produits de bien-être de qualité supérieure.",
             "hero_btn_texte": "Achetez maintenant", "hero_btn_lien": "/peptides",
             "feat1": "Magasin fiable proposant des produits de qualité.",
             "feat2": "Des prix abordables et attractifs pour tous les clients.",
@@ -3885,7 +3900,7 @@ def seed():
                         date=datetime(2025, 12, 28)),
                 Article(titre="Que sont les peptides et pourquoi sont-ils populaires ?",
                         slug="pourquoi-peptides-populaires", categorie="peptides",
-                        extrait="Les peptides connaissent une popularité croissante...",
+                        extimait="Les peptides connaissent une popularité croissante...",
                         contenu="<p>Les peptides sont de plus en plus étudiés.</p>",
                         date=datetime(2025, 12, 4)),
             ])
