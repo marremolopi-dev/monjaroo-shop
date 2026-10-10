@@ -3900,7 +3900,7 @@ def seed():
                         date=datetime(2025, 12, 28)),
                 Article(titre="Que sont les peptides et pourquoi sont-ils populaires ?",
                         slug="pourquoi-peptides-populaires", categorie="peptides",
-                        extimait="Les peptides connaissent une popularité croissante...",
+                        extrait="Les peptides connaissent une popularité croissante...",
                         contenu="<p>Les peptides sont de plus en plus étudiés.</p>",
                         date=datetime(2025, 12, 4)),
             ])
